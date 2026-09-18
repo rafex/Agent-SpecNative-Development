@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Interactive SpecNative definition agent pilot"
 requires-python = ">=3.11"
 dependencies = [
-  "smolagents[mcp]>=1.26,<2",
+  "smolagents[mcp,openai]>=1.26,<2",
 ]
 
 [project.optional-dependencies]
