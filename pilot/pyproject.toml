@@ -5,12 +5,14 @@ description = "Interactive SpecNative definition agent pilot"
 requires-python = ">=3.11"
 dependencies = [
   "smolagents[mcp,openai]>=1.26,<2",
+  "mcp>=1.10,<2",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 
 [project.scripts]
+asn = "specnative_pilot.cli:asn_main"
 specnative-agent = "specnative_pilot.cli:main"
 
 [build-system]

@@ -23,6 +23,18 @@ preflight antes de iniciar el modelo y termina sin escribir si falla.
 just asn
 ```
 
+El comando canónico no depende de Just. Para instalar el piloto Python:
+
+```bash
+uv tool install --editable ./pilot
+export SPECNATIVE_AGENT_ROOT=/ruta/al/Agent-SpecNative-Development
+cd /ruta/al/proyecto
+asn
+```
+
+Para construir el paquete distribuible usa `make build`, que ejecuta `uv
+build`. `just asn` es sólo un adaptador opcional que delega en ese ejecutable.
+
 Dentro de la sesión, `/template nombre` es la única forma de solicitar una
 plantilla y siempre requiere confirmación explícita.
 

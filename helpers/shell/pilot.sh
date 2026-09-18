@@ -7,10 +7,11 @@ source "$SCRIPT_DIR/lib/logs.sh"
 goal=""
 workspace="$(pwd)"
 project_name="specnative-agent-pilot"
+uv="uv"
 python_bootstrap="python3"
 venv=".specnative/.venv"
 python=".specnative/.venv/bin/python"
-agent=".specnative/.venv/bin/specnative-agent"
+agent=".specnative/.venv/bin/asn"
 question_mode="single"
 log_file=""
 man_target=""
@@ -21,6 +22,7 @@ while [[ $# -gt 0 ]]; do
         --goal)              goal="${2:-}"; shift 2 ;;
         --workspace)         workspace="${2:-}"; shift 2 ;;
         --project-name)      project_name="${2:-}"; shift 2 ;;
+        --uv)                uv="${2:-}"; shift 2 ;;
         --python-bootstrap)  python_bootstrap="${2:-}"; shift 2 ;;
         --venv)              venv="${2:-}"; shift 2 ;;
         --python)            python="${2:-}"; shift 2 ;;
@@ -65,6 +67,12 @@ echo "Workspace: $workspace"
 
 cd "$workspace"
 
+if [[ "$venv" = /* ]]; then
+    venv_path="$venv"
+else
+    venv_path="$workspace/$venv"
+fi
+
 run_tests() {
     PYTHONPATH=pilot/src "$python" -m pytest -q pilot/tests
 }
@@ -75,6 +83,13 @@ run_compile() {
 
 is_supported_python() {
     "$1" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1
+}
+
+require_uv() {
+    if ! command -v "$uv" >/dev/null 2>&1; then
+        echo "No se encontró uv. Instálalo desde https://docs.astral.sh/uv/" >&2
+        exit 1
+    fi
 }
 
 select_bootstrap_python() {
@@ -100,9 +115,9 @@ select_bootstrap_python() {
 case "$goal" in
     help)
         echo "SpecNative Agent Pilot"
-        echo "  setup    Crear el entorno e instalar dependencias"
-        echo "  install  Instalar el paquete editable con dependencias de desarrollo"
-        echo "  build    Construir/instalar el piloto"
+        echo "  setup    Sincronizar el entorno con uv.lock"
+        echo "  install  Sincronizar el paquete editable con uv"
+        echo "  build    Construir el paquete wheel/sdist con uv"
         echo "  test     Ejecutar la suite de pruebas"
         echo "  compile  Verificar compilación de Python"
         echo "  check    Ejecutar test, compile y git diff --check"
@@ -111,12 +126,18 @@ case "$goal" in
         echo "  batch    Iniciar el CLI en modo de preguntas por bloques"
         ;;
     setup)
+        require_uv
         select_bootstrap_python
-        "$python_bootstrap" -m venv "$venv"
-        "$python" -m pip install -e 'pilot[dev]'
+        UV_PROJECT_ENVIRONMENT="$venv_path" "$uv" sync --project pilot --extra dev --locked --python "$python_bootstrap"
         ;;
-    install|build)
-        "$python" -m pip install -e 'pilot[dev]'
+    install)
+        require_uv
+        select_bootstrap_python
+        UV_PROJECT_ENVIRONMENT="$venv_path" "$uv" sync --project pilot --extra dev --locked --python "$python_bootstrap"
+        ;;
+    build)
+        require_uv
+        "$uv" build --no-sources --project pilot --out-dir pilot/dist
         ;;
     test)
         run_tests

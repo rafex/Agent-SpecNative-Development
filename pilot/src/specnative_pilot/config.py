@@ -33,8 +33,11 @@ def load_config(
             raw = tomllib.load(handle)
     agent = raw.get("agent", {})
     mcp = raw.get("mcp", {})
-    python_path = Path(mcp_python or mcp.get("python", repo / ".specnative" / ".venv" / "bin" / "python"))
-    script_path = Path(mcp_script or mcp.get("script", repo / ".specnative" / "specnative_mcp.py"))
+    agent_root = os.getenv("SPECNATIVE_AGENT_ROOT")
+    default_python = Path(agent_root) / ".specnative" / ".venv" / "bin" / "python" if agent_root else repo / ".specnative" / ".venv" / "bin" / "python"
+    default_script = Path(agent_root) / ".specnative" / "specnative_mcp.py" if agent_root else repo / ".specnative" / "specnative_mcp.py"
+    python_path = Path(mcp_python or mcp.get("python", default_python))
+    script_path = Path(mcp_script or mcp.get("script", default_script))
     if not python_path.is_absolute():
         python_path = repo / python_path
     if not script_path.is_absolute():

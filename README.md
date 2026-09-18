@@ -34,3 +34,19 @@ just asn
 El proyecto consumidor sólo necesita `just`, el adaptador y contexto
 SpecNative válido. No necesita instalar el MCP. El preflight se ejecuta antes
 del modelo y no realiza escrituras si el contexto es inválido.
+
+## Comando independiente `asn`
+
+La interfaz principal es `asn` (Agent Spec Native). En el piloto Python se
+instala como un comando ejecutable:
+
+```bash
+uv tool install --editable ./pilot
+export SPECNATIVE_AGENT_ROOT=/ruta/al/Agent-SpecNative-Development
+cd /ruta/al/proyecto
+asn
+```
+
+Para generar wheel y sdist usa `make build`; internamente ejecuta `uv build`.
+`just asn` sólo funciona como un adaptador opcional que delega en el mismo
+ejecutable.

@@ -1,5 +1,9 @@
 # SpecNative — venv is generated; do not commit
 .specnative/.venv/
+pilot/.venv/
+pilot/.specnative/
+pilot/build/
+pilot/dist/
 
 # Python bytecode is generated locally
 __pycache__/

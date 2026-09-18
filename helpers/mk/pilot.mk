@@ -6,6 +6,7 @@ define run_pilot
 	bash "$(PILOT_HELPER)" \
 		--workspace "$(WORKSPACE)" \
 		--project-name "$(PROJECT_NAME)" \
+		--uv "$(UV)" \
 		--python-bootstrap "$(PYTHON_BOOTSTRAP)" \
 		--venv "$(VENV)" \
 		--python "$(PYTHON)" \
