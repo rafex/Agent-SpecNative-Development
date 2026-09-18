@@ -35,6 +35,29 @@ make install
 subiendo por los directorios padre. Si no lo encuentra, usa el MCP incluido
 en el paquete global. Un MCP local encontrado que falle no activa fallback.
 
+Para el MCP incluido, la ejecución usa una caché remota con TTL de 24 horas.
+Consulta el último release de SpecNative, verifica el digest SHA-256 del asset
+`specnative_mcp.py`, y si falla intenta clonar `main` y usar
+`tools/specnative_mcp.py`. Si ambas fuentes remotas fallan, conserva la última
+copia cacheada; si no existe, usa la versión interna del paquete. Los archivos
+cacheados viven en `${XDG_CACHE_HOME:-~/.cache}/asn/mcp`.
+
+Variables de operación:
+
+```bash
+SPECNATIVE_MCP_UPDATE=auto     # predeterminado: respeta el TTL
+SPECNATIVE_MCP_UPDATE=never    # no consulta Internet
+SPECNATIVE_MCP_UPDATE=force    # actualiza en cada ejecución
+SPECNATIVE_MCP_CACHE_TTL=3600  # TTL en segundos
+SPECNATIVE_MCP_CACHE_DIR=/tmp/asn-mcp-cache
+```
+
+Para limpiar la copia remota:
+
+```bash
+rm -rf ~/.cache/asn/mcp
+```
+
 Para construir el paquete distribuible usa `make build`, que ejecuta `uv
 build`. `just asn` es sólo un adaptador opcional que delega en ese ejecutable.
 

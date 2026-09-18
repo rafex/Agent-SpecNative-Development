@@ -51,6 +51,18 @@ update-shell` o añádelo manualmente. `asn-mcp --repo .` expone el MCP para
 Codex, Claude u OpenCode. Busca primero `.specnative/specnative_mcp.py` en el
 proyecto y sus padres; si no existe, usa el MCP incluido en ASN.
 
+Cuando no hay un MCP local, ASN actualiza la copia remota fuera del entorno de
+`uv`: primero consulta el último release y verifica su SHA-256, después intenta
+clonar el repositorio y finalmente usa la versión interna. La copia remota se
+guarda en `${XDG_CACHE_HOME:-~/.cache}/asn/mcp` durante 24 horas. Se puede
+controlar con:
+
+```bash
+SPECNATIVE_MCP_UPDATE=never asn-mcp --repo .
+SPECNATIVE_MCP_UPDATE=force asn-mcp --repo .
+SPECNATIVE_MCP_CACHE_TTL=3600 asn-mcp --repo .
+```
+
 Para generar wheel y sdist usa `make build`; internamente ejecuta `uv build`.
 `just asn` sólo funciona como un adaptador opcional que delega en el comando
 instalado.

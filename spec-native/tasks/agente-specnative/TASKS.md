@@ -49,10 +49,12 @@ Crear el binario Rust y sus interfaces pequeñas para conversación, configuraci
 
 ### TASK-AGENTE-SPECNATIV-0003 - Integrar el adaptador MCP de SpecNative
 
+> **Update 2026-09-18T16:59:51Z:** Añadir actualización automática del MCP incluido: release, fallback Git, caché y fallback interno.
+
 ```toml
 id = "TASK-AGENTE-SPECNATIV-0003"
 title = "Integrar el adaptador MCP de SpecNative"
-state = "todo"
+state = "done"
 priority = "p0"
 owner = "rafex"
 labels = []
@@ -60,6 +62,7 @@ dependencies = ["TASK-AGENTE-SPECNATIV-0002"]
 expected_files = ["src/specnative_mcp.rs", "tests/integration/"]
 close_criteria = "Una prueba de integración contra un repositorio temporal demuestra lectura de contexto, actualización y validación sin estado paralelo."
 validation = ["cargo test", "specnative validate"]
+completion_evidence = ["Implementado el proveedor remoto MCP con caché XDG de 24 h, modos auto/never/force, verificación SHA-256 del release, fallback a git clone main/tools/specnative_mcp.py, fallback a caché anterior y finalmente MCP interno. Validado con 22 pruebas, uv lock --check, make check, make build, validación SpecNative y handshake MCP real contra release v0.9.0."]
 ```
 
 Implementar el cliente/adaptador que carga contexto, lee y actualiza documentos canónicos y ejecuta validación a través del MCP de SpecNative.
