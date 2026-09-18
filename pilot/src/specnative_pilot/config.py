@@ -19,7 +19,13 @@ class Config:
     mcp_script: Path
 
 
-def load_config(repo: Path, config_path: Path | None = None, question_mode: str | None = None) -> Config:
+def load_config(
+    repo: Path,
+    config_path: Path | None = None,
+    question_mode: str | None = None,
+    mcp_python: Path | None = None,
+    mcp_script: Path | None = None,
+) -> Config:
     raw: dict = {}
     path = config_path or repo / ".specnative" / "agent.toml"
     if path.exists():
@@ -27,8 +33,8 @@ def load_config(repo: Path, config_path: Path | None = None, question_mode: str 
             raw = tomllib.load(handle)
     agent = raw.get("agent", {})
     mcp = raw.get("mcp", {})
-    python_path = Path(mcp.get("python", repo / ".specnative" / ".venv" / "bin" / "python"))
-    script_path = Path(mcp.get("script", repo / ".specnative" / "specnative_mcp.py"))
+    python_path = Path(mcp_python or mcp.get("python", repo / ".specnative" / ".venv" / "bin" / "python"))
+    script_path = Path(mcp_script or mcp.get("script", repo / ".specnative" / "specnative_mcp.py"))
     if not python_path.is_absolute():
         python_path = repo / python_path
     if not script_path.is_absolute():

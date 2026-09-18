@@ -69,10 +69,18 @@ class Controller:
         self.say(str(mcp.call("validate")))
         self.say(str(mcp.call("health_check")))
 
-    def run(self, initiative: str | None = None) -> int:
+    def run_preflight(self, mcp: SpecNativeMcp) -> bool:
+        validation = str(mcp.call("validate"))
+        self.say(validation)
+        return validation.startswith("Validation passed")
+
+    def run(self, initiative: str | None = None, preflight: bool = False) -> int:
         history_path = self.config.repo / ".specnative" / "agent" / "sessions" / "latest.jsonl" if self.config.history else None
         history = HistoryStore(history_path)
         with SpecNativeMcp(self.config.repo, self.config.mcp_python, self.config.mcp_script) as mcp:
+            if preflight and not self.run_preflight(mcp):
+                self.say("Preflight SpecNative falló; no se inició el modelo ni se modificaron archivos.")
+                return 2
             initiative = initiative or self.choose_initiative(mcp)
             model = build_model(self.config)
             context = str(mcp.call("context_snapshot", initiative=initiative if (self.config.repo / "spec-native" / "specs" / initiative / "SPEC.md").exists() else ""))

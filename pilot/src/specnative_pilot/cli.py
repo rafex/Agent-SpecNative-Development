@@ -13,11 +13,14 @@ def main() -> int:
     parser.add_argument("--initiative")
     parser.add_argument("--config", type=Path)
     parser.add_argument("--question-mode", choices=["single", "batch"])
+    parser.add_argument("--mcp-python", type=Path, help="Python que ejecuta el MCP externo")
+    parser.add_argument("--mcp-script", type=Path, help="Script del MCP externo")
+    parser.add_argument("--preflight", action="store_true", help="Valida el contexto antes de iniciar el modelo")
     args = parser.parse_args()
     repo = args.repo.resolve()
-    config = load_config(repo, args.config, args.question_mode)
+    config = load_config(repo, args.config, args.question_mode, args.mcp_python, args.mcp_script)
     try:
-        return Controller(config).run(args.initiative)
+        return Controller(config).run(args.initiative, preflight=args.preflight)
     except KeyboardInterrupt:
         print("\nSesión cancelada.")
         return 130

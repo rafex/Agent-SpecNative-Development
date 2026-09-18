@@ -38,3 +38,14 @@ def test_rejected_template_never_applies(tmp_path):
     controller.handle_template(mcp, "demo", "feature-rest-endpoint")
     assert [name for name, _ in mcp.calls] == ["list_templates"]
     assert "Plantilla rechazada" in output.getvalue()
+
+
+def test_failed_preflight_stops_before_model_or_writes(tmp_path):
+    output = StringIO()
+    controller = Controller(config(tmp_path), input_fn=lambda _: "", output=output)
+    mcp = FakeMcp("unused")
+    mcp.call = lambda name, **arguments: "Validation failed:\n  - missing context" if name == "validate" else "unexpected"
+
+    assert controller.run_preflight(mcp) is False
+    assert mcp.call("validate") == "Validation failed:\n  - missing context"
+    assert "Validation failed" in output.getvalue()
