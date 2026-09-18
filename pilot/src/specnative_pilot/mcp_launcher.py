@@ -26,3 +26,7 @@ def main() -> int:
             command = [sys.executable, "-m", "specnative_pilot.mcp_server", "--repo", str(repo), *extra]
     os.execv(sys.executable, command)
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

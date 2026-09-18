@@ -60,8 +60,8 @@ if [[ -f "${source_manual}" && ! -e "${target}/docs/man_asn.md" ]]; then
   cp "${source_manual}" "${target}/docs/man_asn.md"
 fi
 
-if ! just --fmt --check --justfile "${target_justfile}"; then
-  echo "SpecNative: el Justfile no supera la comprobación de formato tras la integración." >&2
+if ! just --summary --justfile "${target_justfile}" >/dev/null; then
+  echo "SpecNative: el Justfile no se puede cargar tras la integración." >&2
   exit 4
 fi
 

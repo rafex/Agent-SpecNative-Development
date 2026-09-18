@@ -148,7 +148,7 @@ case "$goal" in
             tool_env+=("UV_TOOL_DIR=/usr/local/share/uv/tools")
         fi
         echo "Instalando ASN en $bin_dir"
-        env "${tool_env[@]}" "$uv" tool install --force --python "$python_bootstrap" "$workspace/pilot"
+        env "${tool_env[@]}" "$uv" tool install --force --reinstall --python "$python_bootstrap" "$workspace/pilot"
         ;;
     build)
         require_uv
