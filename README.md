@@ -25,9 +25,19 @@ asn
 
 Una instalación de usuario usa `~/.local/bin`; con privilegios usa
 `/usr/local/bin`. Si `~/.local/bin` no está en `PATH`, ejecuta `uv tool
-update-shell` o añádelo manualmente. `asn-mcp --repo .` expone el MCP para
-Codex, Claude u OpenCode. Busca primero `.specnative/specnative_mcp.py` en el
-proyecto y sus padres; si no existe, usa el MCP incluido en ASN.
+update-shell` o añádelo manualmente. ASN instala `asn`, `asn-mcp` y
+`asn-agent-mcp`.
+
+Para preparar un proyecto sin modificar su `Justfile`:
+
+```bash
+asn setup --repo . --clients all
+```
+
+Esto agrega las skills y registra `asn-agent-mcp` junto con `asn-mcp` en Codex,
+Claude y OpenCode. El agente usa primero `asn-agent-mcp`; `asn-mcp` queda para
+diagnóstico y operaciones avanzadas. Ambos buscan primero
+`.specnative/specnative_mcp.py` en el proyecto y sus padres.
 
 Cuando no hay un MCP local, ASN actualiza la copia remota fuera del entorno de
 `uv`: primero consulta el último release y verifica su SHA-256, después intenta

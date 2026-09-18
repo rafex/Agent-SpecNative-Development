@@ -9,6 +9,7 @@ from .history import HistoryStore
 from .intent import parse_template_command
 from .mcp import SpecNativeMcp
 from .model import build_model
+from .session import AgentSession
 from .templates import spec_template_names
 
 
@@ -75,33 +76,36 @@ class Controller:
         return validation.startswith("Validation passed")
 
     def run(self, initiative: str | None = None, preflight: bool = False) -> int:
-        history_path = self.config.repo / ".specnative" / "agent" / "sessions" / "latest.jsonl" if self.config.history else None
-        history = HistoryStore(history_path)
         with SpecNativeMcp(self.config.repo, self.config.mcp_python, self.config.mcp_script) as mcp:
             if preflight and not self.run_preflight(mcp):
                 self.say("Preflight SpecNative falló; no se inició el modelo ni se modificaron archivos.")
                 return 2
             initiative = initiative or self.choose_initiative(mcp)
-            model = build_model(self.config)
-            context = str(mcp.call("context_snapshot", initiative=initiative if (self.config.repo / "spec-native" / "specs" / initiative / "SPEC.md").exists() else ""))
-            agent = SpecNativeAgent(model, mcp, initiative, self.config.question_mode, self.config.max_steps)
+            session = AgentSession.from_mcp(self.config, initiative, mcp, owns_mcp=False)
             self.say("Piloto SpecNative iniciado. Usa /template nombre, /help o /quit.")
             while True:
                 message = self.input("\n> ").strip()
                 if message in {"/quit", "/exit"}:
+                    session.close()
                     return 0
                 if message == "/help":
                     self.say("Escribe la idea o responde preguntas. /template nombre aplica una plantilla sólo tras confirmación.")
                     continue
                 if not message:
                     continue
-                history.append("user", initiative=initiative, message=message)
-                command = parse_template_command(message)
-                if command is not None:
-                    self.handle_template(mcp, initiative, command.name)
+                result = session.message(message)
+                self.say(str(result.get("text", "")))
+                if result.get("status") != "approval_required":
                     continue
-                response = agent.run_turn(message, context)
-                history.append("agent", initiative=initiative, response=response)
-                self.say(response)
-                self.apply_proposals(mcp, agent.proposals)
+                for proposal in result.get("proposals", []):
+                    self.say(f"\n[{proposal['document']}/{proposal['section']}] {proposal['rationale']}")
+                    self.say(proposal["content"][:3000])
+                token = result["approval_token"]
+                if self.confirm("¿Confirmar la propuesta?"):
+                    applied = session.approve(token)
+                    self.say(str(applied.get("text", "")))
+                    self.say(str(applied.get("validation", "")))
+                    self.say(str(applied.get("health_check", "")))
+                else:
+                    self.say(session.reject(token)["text"])
         return 0

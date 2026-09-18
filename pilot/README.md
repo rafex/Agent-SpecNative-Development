@@ -25,6 +25,19 @@ Ejecuta el piloto:
 ./.specnative/.venv/bin/specnative-agent --repo .
 ```
 
+El paquete instalado expone tres interfaces:
+
+```bash
+asn --repo .
+asn-agent-mcp --repo .
+asn-mcp --repo .
+asn setup --repo . --clients all
+```
+
+`asn-agent-mcp` encapsula el mismo agente para clientes MCP; `asn-mcp` es el
+servidor SpecNative directo para diagnóstico. `asn setup` instala las skills y
+configuraciones de Codex, Claude y OpenCode sin tocar el `Justfile`.
+
 También puedes copiar `agent.toml.example` a `.specnative/agent.toml` para
 configurar el modelo, el modo de preguntas, el historial y el comando MCP.
 

@@ -14,6 +14,7 @@ dev = ["pytest>=8"]
 [project.scripts]
 asn = "specnative_pilot.cli:asn_main"
 asn-mcp = "specnative_pilot.mcp_launcher:main"
+asn-agent-mcp = "specnative_pilot.agent_mcp_server:main"
 specnative-agent = "specnative_pilot.cli:main"
 
 [build-system]
@@ -22,6 +23,9 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+specnative_pilot = ["resources/**/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

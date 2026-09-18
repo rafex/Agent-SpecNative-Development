@@ -19,7 +19,8 @@ preflight antes de iniciar el modelo y termina sin escribir si falla.
 
 ```bash
 asn --repo .
-asn-mcp --repo .         # MCP para Codex, Claude u OpenCode
+asn-mcp --repo .         # MCP SpecNative directo
+asn-agent-mcp --repo .   # agente ASN para Codex, Claude u OpenCode
 ```
 
 El comando canónico no depende de Just. Instálalo desde el repositorio del
@@ -56,8 +57,15 @@ Para limpiar la copia remota:
 rm -rf ~/.cache/asn/mcp
 ```
 
+Para preparar skills y configuraciones de cliente sin tocar el `Justfile`:
+
+```bash
+asn setup --repo . --clients all
+```
+
 Para construir el paquete distribuible usa `make build`, que ejecuta `uv
-build`. Los clientes con skills se conectan mediante `asn-mcp --repo .`.
+build`. Los clientes usan normalmente `asn-agent-mcp --repo .`; `asn-mcp --repo
+.` queda disponible para diagnóstico.
 
 Dentro de la sesión, `/template nombre` es la única forma de solicitar una
 plantilla y siempre requiere confirmación explícita.
