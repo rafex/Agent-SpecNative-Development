@@ -2,31 +2,33 @@
 
 ## Runtime
 
-- **Lenguaje**: Rust.
-- **Versión**: toolchain estable soportada por el proyecto; fijar la versión exacta al iniciar la implementación.
-- **Distribución**: binario CLI pequeño, ejecutable localmente.
+- **Piloto**: Python 3.14 de Homebrew, ejecutado en el entorno virtual del repositorio.
+- **Objetivo de producción**: Rust estable, distribuido como binario CLI local.
 
 ## Frameworks y protocolos
 
-- **Cargo**: compilación, dependencias y pruebas.
-- **stdio/JSON**: transporte inicial para integrar el agente con clientes y procesos de desarrollo.
-- **MCP**: cliente/adaptador hacia el servidor SpecNative existente.
-- **Modelo de lenguaje**: proveedor intercambiable detrás de un trait/interfaz; no se fija uno en esta etapa.
+- **Piloto**: `smolagents` con `ToolCallingAgent`; no se usa `CodeAgent` ni ejecución de código generado.
+- **Migración**: Rig para la capa LLM y `rmcp` para MCP en Rust.
+- **MCP**: cliente por stdio hacia el servidor SpecNative existente.
+- **Modelo**: endpoint compatible con OpenAI, configurable por variables de entorno o archivo local.
+- **Transporte**: CLI interactivo y stdio/JSON como frontera futura.
 
 ## Infraestructura
 
 - **Persistencia**: archivos del repositorio, principalmente `spec-native/`.
-- **Base de datos**: ninguna en el MVP.
-- **Hosting**: local; no requerido para la primera versión.
-- **CI/CD**: compilación, pruebas y validación de artefactos SpecNative.
+- **Historial opcional**: JSONL local bajo `.specnative/agent/sessions/`, excluido de Git.
+- **Base de datos**: ninguna.
+- **Hosting**: local; no requerido para el piloto.
 
 ## Integraciones
 
-- **SpecNative MCP**: criticidad alta; proporciona la semántica y operaciones canónicas del framework.
-- **Proveedor de modelo**: criticidad alta para la conversación, pero reemplazable y configurable.
+- **SpecNative MCP**: criticidad alta; expone contexto, lectura, validación y escrituras aprobadas por el controlador.
+- **Proveedor de modelo**: reemplazable; el piloto usa una API compatible con OpenAI.
 
 ## Restricciones
 
-- Mantener bajo el número de dependencias y el tiempo de arranque.
-- No incorporar un runtime de agentes generalista si una capa pequeña de orquestación es suficiente.
-- La aplicación de plantillas debe ser una operación explícita y comprobable.
+- Mantener pequeño el controlador y la lista de dependencias.
+- El modelo sólo recibe herramientas de lectura y `propose_change`.
+- Toda escritura requiere confirmación del usuario.
+- La aplicación de plantillas sólo puede iniciar desde `/template <nombre>`.
+- La propuesta y la política de permisos deben poder portarse a Rig + rmcp.

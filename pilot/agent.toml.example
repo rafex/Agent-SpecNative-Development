@@ -1,0 +1,12 @@
+[agent]
+# Set this to the model exposed by your OpenAI-compatible endpoint.
+model = ""
+api_base = ""
+api_key_env = "OPENAI_API_KEY"
+question_mode = "single"
+history = false
+max_steps = 12
+
+[mcp]
+python = ".specnative/.venv/bin/python"
+script = ".specnative/specnative_mcp.py"

@@ -4,3 +4,9 @@
 # Python bytecode is generated locally
 __pycache__/
 *.py[cod]
+
+# Editable Python installs generate package metadata
+*.egg-info/
+
+# Optional pilot conversation history is local state
+.specnative/agent/sessions/

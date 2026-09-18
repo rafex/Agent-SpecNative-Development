@@ -3,14 +3,14 @@
 ```toml
 artifact_type = "spec"
 id            = "SPEC-0001"
-state         = "draft"
+state         = "active"
 owner         = "rafex"
 created_at    = "2026-09-17"
 updated_at    = "2026-09-17"
 replaces      = "none"
-related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005"]
+related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006"]
 related_decisions = []
-artifacts     = []
+artifacts     = ["pilot/", ".specnative/specnative_mcp.py"]
 validation    = ["cargo test", "specnative validate", "walkthrough de conversación"]
 ```
 

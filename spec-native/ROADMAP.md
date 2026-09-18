@@ -2,17 +2,16 @@
 
 ## Ahora
 
-- Formalizar el producto, límites y arquitectura del agente especializado.
-- Definir el MVP de conversación para aclarar y producir specs válidas.
-- Definir el contrato de integración con el MCP de SpecNative.
-- Garantizar que las plantillas sólo se apliquen mediante una instrucción explícita.
+- Validar la experiencia del agente con el piloto Python y `smolagents`.
+- Completar el flujo idea → preguntas → propuesta → confirmación → SPEC.md/TASKS.md.
+- Garantizar que las plantillas sólo se apliquen mediante `/template <nombre>`.
+- Medir el piloto con escenarios reproducibles y validar la integración MCP.
 
 ## Después
 
-- Implementar el binario Rust con interfaz CLI/stdio.
-- Implementar carga de contexto, diálogo guiado, actualización y validación de documentos.
-- Incorporar un registro de plantillas opt-in con confirmación y evidencia.
-- Probar el flujo con un proveedor de modelo configurable y repositorios reales.
+- Analizar resultados del piloto y estabilizar el contrato de propuestas.
+- Implementar el agente de producción en Rust con Rig + rmcp.
+- Conservar el mismo flujo de preguntas, permisos, plantillas y documentos.
 
 ## Más adelante
 
@@ -25,4 +24,5 @@
 - UI web o servidor persistente.
 - Agente generalista de coding.
 - Aplicación automática de plantillas.
-- Base de datos o dependencia obligatoria de un proveedor de modelos específico.
+- Base de datos.
+- Migrar a Rust antes de evaluar el piloto.

@@ -815,6 +815,64 @@ def read_spec(initiative: str = "") -> str:
     return _read(path)
 
 
+def _initiative_path(initiative: str) -> Path | None:
+    """Return a safe initiative directory or None for an invalid slug."""
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", initiative):
+        return None
+    return SN / "specs" / initiative
+
+
+@mcp.tool()
+def write_spec(initiative: str, content: str) -> str:
+    """
+    Create or replace an initiative SPEC.md after an agent proposal is
+    explicitly approved by the caller.
+
+    Args:
+        initiative: Kebab-case initiative folder name.
+        content: Complete SPEC.md content, including its TOML metadata block.
+    """
+    directory = _initiative_path(initiative)
+    if directory is None:
+        return "Invalid initiative name. Use lowercase kebab-case."
+    metadata = _toml_loads(content)
+    if metadata.get("artifact_type") != "spec":
+        return "SPEC.md must contain artifact_type = \"spec\" metadata."
+    if metadata.get("state") not in {"draft", "active", "blocked", "done", "superseded"}:
+        return "SPEC.md must declare a valid SpecNative state."
+    destination = directory / "SPEC.md"
+    directory.mkdir(parents=True, exist_ok=True)
+    destination.write_text(content.rstrip() + "\n", encoding="utf-8")
+    return f"spec-native/specs/{initiative}/SPEC.md written."
+
+
+@mcp.tool()
+def write_tasks(initiative: str, content: str) -> str:
+    """
+    Create or replace an initiative TASKS.md after an agent proposal is
+    explicitly approved by the caller.
+
+    Args:
+        initiative: Kebab-case initiative folder name.
+        content: Complete TASKS.md content, including TOML metadata.
+    """
+    directory = _initiative_path(initiative)
+    if directory is None:
+        return "Invalid initiative name. Use lowercase kebab-case."
+    spec = directory / "SPEC.md"
+    if not spec.exists():
+        return f"Cannot write tasks before spec-native/specs/{initiative}/SPEC.md exists."
+    metadata = _toml_loads(content)
+    if metadata.get("artifact_type") != "task_file":
+        return "TASKS.md must contain artifact_type = \"task_file\" metadata."
+    if metadata.get("initiative") != initiative:
+        return "TASKS.md initiative metadata does not match the requested initiative."
+    destination = SN / "tasks" / initiative / "TASKS.md"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(content.rstrip() + "\n", encoding="utf-8")
+    return f"spec-native/tasks/{initiative}/TASKS.md written."
+
+
 @mcp.tool()
 def read_context(document: str) -> str:
     """
