@@ -1,7 +1,8 @@
 # setup
 
-Crea `.specnative/.venv` usando `PYTHON_BOOTSTRAP` e instala el piloto con
-sus dependencias de desarrollo.
+Crea únicamente `.specnative/.venv` usando `PYTHON_BOOTSTRAP` y sincroniza las
+dependencias de desarrollo con `uv.lock`. No modifica `PATH` ni instala
+comandos globales.
 
 ```bash
 make setup

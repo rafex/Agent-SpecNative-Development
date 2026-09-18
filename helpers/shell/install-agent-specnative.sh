@@ -65,4 +65,4 @@ if ! just --fmt --check --justfile "${target_justfile}"; then
   exit 4
 fi
 
-echo "SpecNative integrado en ${target}. Configura SPECNATIVE_AGENT_ROOT y ejecuta: just asn"
+echo "SpecNative integrado en ${target}. Instala ASN con make install y ejecuta: just asn"

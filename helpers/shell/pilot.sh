@@ -12,6 +12,7 @@ python_bootstrap="python3"
 venv=".specnative/.venv"
 python=".specnative/.venv/bin/python"
 agent=".specnative/.venv/bin/asn"
+bin_dir=""
 question_mode="single"
 log_file=""
 man_target=""
@@ -27,6 +28,7 @@ while [[ $# -gt 0 ]]; do
         --venv)              venv="${2:-}"; shift 2 ;;
         --python)            python="${2:-}"; shift 2 ;;
         --agent)             agent="${2:-}"; shift 2 ;;
+        --bin-dir)           bin_dir="${2:-}"; shift 2 ;;
         --question-mode)     question_mode="${2:-}"; shift 2 ;;
         --log-file)          log_file="${2:-}"; shift 2 ;;
         --man)               man_target="${2:-}"; shift 2 ;;
@@ -116,7 +118,7 @@ case "$goal" in
     help)
         echo "SpecNative Agent Pilot"
         echo "  setup    Sincronizar el entorno con uv.lock"
-        echo "  install  Sincronizar el paquete editable con uv"
+        echo "  install  Instalar asn y asn-mcp como herramientas uv"
         echo "  build    Construir el paquete wheel/sdist con uv"
         echo "  test     Ejecutar la suite de pruebas"
         echo "  compile  Verificar compilación de Python"
@@ -133,7 +135,20 @@ case "$goal" in
     install)
         require_uv
         select_bootstrap_python
-        UV_PROJECT_ENVIRONMENT="$venv_path" "$uv" sync --project pilot --extra dev --locked --python "$python_bootstrap"
+        if [[ -z "$bin_dir" ]]; then
+            if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+                bin_dir="/usr/local/bin"
+            else
+                bin_dir="${HOME}/.local/bin"
+            fi
+        fi
+        mkdir -p "$bin_dir"
+        tool_env=("UV_TOOL_BIN_DIR=$bin_dir")
+        if [[ "${EUID:-$(id -u)}" -eq 0 && -z "${UV_TOOL_DIR:-}" ]]; then
+            tool_env+=("UV_TOOL_DIR=/usr/local/share/uv/tools")
+        fi
+        echo "Instalando ASN en $bin_dir"
+        env "${tool_env[@]}" "$uv" tool install --force --python "$python_bootstrap" "$workspace/pilot"
         ;;
     build)
         require_uv

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,7 @@ READ_ONLY_TOOLS = {
 
 
 class SpecNativeMcp:
-    def __init__(self, repo: Path, python: Path, script: Path) -> None:
+    def __init__(self, repo: Path, python: Path | None = None, script: Path | None = None) -> None:
         self.repo = repo
         self.python = python
         self.script = script
@@ -26,9 +27,17 @@ class SpecNativeMcp:
         self._tools: dict[str, Any] = {}
 
     def __enter__(self) -> "SpecNativeMcp":
+        if (self.python is None) != (self.script is None):
+            raise RuntimeError("--mcp-python y --mcp-script deben proporcionarse juntas")
+        if self.python is None:
+            command = sys.executable
+            args = ["-m", "specnative_pilot.mcp_launcher", "--repo", str(self.repo)]
+        else:
+            command = str(self.python)
+            args = [str(self.script), "--repo", str(self.repo)]
         params = StdioServerParameters(
-            command=str(self.python),
-            args=[str(self.script), "--repo", str(self.repo)],
+            command=command,
+            args=args,
             cwd=str(self.repo),
             env=dict(os.environ),
         )

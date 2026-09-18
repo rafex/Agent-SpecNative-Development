@@ -6,12 +6,13 @@ uv := env_var_or_default("UV", "uv")
 venv := env_var_or_default("SPECNATIVE_VENV", ".specnative/.venv")
 python := env_var_or_default("SPECNATIVE_PYTHON", venv + "/bin/python")
 agent := env_var_or_default("SPECNATIVE_AGENT", venv + "/bin/asn")
+bin_dir := env_var_or_default("BIN_DIR", "")
 workspace := env_var_or_default("SPECNATIVE_WORKSPACE", ".")
 project_name := env_var_or_default("SPECNATIVE_PROJECT_NAME", "specnative-agent-pilot")
 log_file := env_var_or_default("SPECNATIVE_LOG_FILE", "/var/log/specnative-agent-pilot/log-just.log")
 
 _run_pilot goal *args:
-    bash "helpers/shell/pilot.sh" --workspace "{{workspace}}" --project-name "{{project_name}}" --uv "{{uv}}" --python-bootstrap "{{python_bootstrap}}" --venv "{{venv}}" --python "{{python}}" --agent "{{agent}}" --goal "{{goal}}" --log-file "{{log_file}}" -- {{args}}
+    bash "helpers/shell/pilot.sh" --workspace "{{ workspace }}" --project-name "{{ project_name }}" --uv "{{ uv }}" --python-bootstrap "{{ python_bootstrap }}" --venv "{{ venv }}" --python "{{ python }}" --agent "{{ agent }}" --bin-dir "{{ bin_dir }}" --goal "{{ goal }}" --log-file "{{ log_file }}" -- {{ args }}
 
 @default:
     just --list
@@ -41,10 +42,10 @@ clean:
     just _run_pilot clean
 
 run *args:
-    just _run_pilot run {{args}}
+    just _run_pilot run {{ args }}
 
 batch *args:
-    just _run_pilot batch {{args}}
+    just _run_pilot batch {{ args }}
 
 man target:
-    bash "helpers/shell/pilot.sh" --workspace "{{workspace}}" --man "{{target}}"
+    bash "helpers/shell/pilot.sh" --workspace "{{ workspace }}" --man "{{ target }}"

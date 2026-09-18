@@ -11,6 +11,7 @@ define run_pilot
 		--venv "$(VENV)" \
 		--python "$(PYTHON)" \
 		--agent "$(AGENT)" \
+		--bin-dir "$(BIN_DIR)" \
 		--goal "$(1)" \
 		--log-file "$(LOG_FILE)"
 endef

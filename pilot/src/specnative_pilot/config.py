@@ -5,6 +5,8 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from .mcp_discovery import find_local_mcp
+
 
 @dataclass(frozen=True)
 class Config:
@@ -15,8 +17,8 @@ class Config:
     question_mode: str
     history: bool
     max_steps: int
-    mcp_python: Path
-    mcp_script: Path
+    mcp_python: Path | None
+    mcp_script: Path | None
 
 
 def load_config(
@@ -33,14 +35,16 @@ def load_config(
             raw = tomllib.load(handle)
     agent = raw.get("agent", {})
     mcp = raw.get("mcp", {})
-    agent_root = os.getenv("SPECNATIVE_AGENT_ROOT")
-    default_python = Path(agent_root) / ".specnative" / ".venv" / "bin" / "python" if agent_root else repo / ".specnative" / ".venv" / "bin" / "python"
-    default_script = Path(agent_root) / ".specnative" / "specnative_mcp.py" if agent_root else repo / ".specnative" / "specnative_mcp.py"
-    python_path = Path(mcp_python or mcp.get("python", default_python))
-    script_path = Path(mcp_script or mcp.get("script", default_script))
-    if not python_path.is_absolute():
+    configured_mcp = find_local_mcp(repo) is None
+    python_value = mcp_python if mcp_python is not None else (mcp.get("python") if configured_mcp else None)
+    script_value = mcp_script if mcp_script is not None else (mcp.get("script") if configured_mcp else None)
+    if (python_value is None) != (script_value is None):
+        raise ValueError("la configuración MCP debe incluir python y script juntos")
+    python_path = Path(python_value) if python_value else None
+    script_path = Path(script_value) if script_value else None
+    if python_path is not None and not python_path.is_absolute():
         python_path = repo / python_path
-    if not script_path.is_absolute():
+    if script_path is not None and not script_path.is_absolute():
         script_path = repo / script_path
     return Config(
         repo=repo,

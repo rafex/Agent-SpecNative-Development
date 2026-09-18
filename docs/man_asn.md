@@ -9,7 +9,6 @@ se mantienen fuera del proyecto.
 ## Configuración
 
 ```bash
-export SPECNATIVE_AGENT_ROOT=/ruta/al/Agent-SpecNative-Development
 export SPECNATIVE_AGENT_MODEL="nombre-del-modelo"
 export OPENAI_API_KEY="..."
 ```
@@ -21,16 +20,20 @@ preflight antes de iniciar el modelo y termina sin escribir si falla.
 
 ```bash
 just asn
+asn --repo .
+asn-mcp --repo .         # MCP para Codex, Claude u OpenCode
 ```
 
-El comando canónico no depende de Just. Para instalar el piloto Python:
+El comando canónico no depende de Just. Instálalo desde el repositorio del
+agente con:
 
 ```bash
-uv tool install --editable ./pilot
-export SPECNATIVE_AGENT_ROOT=/ruta/al/Agent-SpecNative-Development
-cd /ruta/al/proyecto
-asn
+make install
 ```
+
+`asn` busca el MCP local más cercano en `.specnative/specnative_mcp.py`,
+subiendo por los directorios padre. Si no lo encuentra, usa el MCP incluido
+en el paquete global. Un MCP local encontrado que falle no activa fallback.
 
 Para construir el paquete distribuible usa `make build`, que ejecuta `uv
 build`. `just asn` es sólo un adaptador opcional que delega en ese ejecutable.

@@ -25,7 +25,6 @@ El instalador rechaza una receta `asn` existente o un adaptador local distinto.
 Después, configura el agente externo:
 
 ```bash
-export SPECNATIVE_AGENT_ROOT=/ruta/al/Agent-SpecNative-Development
 export SPECNATIVE_AGENT_MODEL="nombre-del-modelo"
 export OPENAI_API_KEY="..."
 just asn
@@ -37,16 +36,21 @@ del modelo y no realiza escrituras si el contexto es inválido.
 
 ## Comando independiente `asn`
 
-La interfaz principal es `asn` (Agent Spec Native). En el piloto Python se
-instala como un comando ejecutable:
+La interfaz principal es `asn` (Agent Spec Native). `make setup` sólo prepara
+el entorno de desarrollo; `make install` instala los comandos ejecutables:
 
 ```bash
-uv tool install --editable ./pilot
-export SPECNATIVE_AGENT_ROOT=/ruta/al/Agent-SpecNative-Development
+make install
 cd /ruta/al/proyecto
 asn
 ```
 
+Una instalación de usuario usa `~/.local/bin`; con privilegios usa
+`/usr/local/bin`. Si `~/.local/bin` no está en `PATH`, ejecuta `uv tool
+update-shell` o añádelo manualmente. `asn-mcp --repo .` expone el MCP para
+Codex, Claude u OpenCode. Busca primero `.specnative/specnative_mcp.py` en el
+proyecto y sus padres; si no existe, usa el MCP incluido en ASN.
+
 Para generar wheel y sdist usa `make build`; internamente ejecuta `uv build`.
-`just asn` sólo funciona como un adaptador opcional que delega en el mismo
-ejecutable.
+`just asn` sólo funciona como un adaptador opcional que delega en el comando
+instalado.

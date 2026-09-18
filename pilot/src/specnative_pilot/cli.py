@@ -5,11 +5,12 @@ from pathlib import Path
 
 from .config import load_config
 from .controller import Controller
+from .mcp_discovery import resolve_project_repo
 
 
 def main(preflight_default: bool = False) -> int:
     parser = argparse.ArgumentParser(description="Piloto interactivo de definición SpecNative")
-    parser.add_argument("--repo", type=Path, default=Path.cwd())
+    parser.add_argument("--repo", type=Path, help="Repositorio destino (por defecto, cwd o su proyecto SpecNative)")
     parser.add_argument("--initiative")
     parser.add_argument("--config", type=Path)
     parser.add_argument("--question-mode", choices=["single", "batch"])
@@ -22,14 +23,16 @@ def main(preflight_default: bool = False) -> int:
         help="Valida el contexto antes de iniciar el modelo",
     )
     args = parser.parse_args()
-    repo = args.repo.resolve()
+    if (args.mcp_python is None) != (args.mcp_script is None):
+        parser.error("--mcp-python y --mcp-script deben proporcionarse juntas")
+    repo = args.repo.resolve() if args.repo else resolve_project_repo(Path.cwd())
     config = load_config(repo, args.config, args.question_mode, args.mcp_python, args.mcp_script)
     try:
         return Controller(config).run(args.initiative, preflight=args.preflight)
     except KeyboardInterrupt:
         print("\nSesión cancelada.")
         return 130
-    except (OSError, RuntimeError) as error:
+    except (OSError, RuntimeError, ValueError) as error:
         print(f"Error del piloto: {error}")
         return 2
 
