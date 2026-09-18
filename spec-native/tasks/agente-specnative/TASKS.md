@@ -103,6 +103,8 @@ Ejecutar pruebas y walkthrough de idea incompleta a spec, incluyendo sesión, cr
 
 ### TASK-AGENTE-SPECNATIV-0006 - Implementar piloto interactivo con smolagents
 
+> **Update 2026-09-18T19:24:53Z:** El piloto Python ahora expone asn-agent-mcp y asn setup; el CLI y el servidor MCP reutilizan AgentSession con propuestas, confirmaciones y plantillas explícitas.
+
 > **Update 2026-09-18T01:18:01Z:** Implementando el piloto Python con smolagents y la barrera de escritura controlada por el controlador.
 
 ```toml
@@ -116,7 +118,7 @@ dependencies = ["TASK-AGENTE-SPECNATIV-0001"]
 expected_files = ["pilot/pyproject.toml", "pilot/src/", "pilot/tests/"]
 close_criteria = "El CLI instala y arranca; el flujo idea → spec → tareas queda cubierto por pruebas y la política impide que el modelo escriba o aplique plantillas directamente."
 validation = ["pytest -q pilot/tests", "compileall pilot/src", "smoke test MCP en repositorio temporal"]
-completion_evidence = ["pytest -q pilot/tests: 6 passed; compileall de pilot/src y .specnative/specnative_mcp.py correcto; smoke test del adaptador MCP en repositorio temporal: passed; CLI --help correcto; el agente no expone write_spec, write_tasks ni apply_spec_template al modelo."]
+completion_evidence = ["pytest -q pilot/tests: 29 passed; uv lock --check --project pilot; make build; make install con ejecutables asn, asn-mcp y asn-agent-mcp; handshake MCP del agente expone agent_session_start, agent_session_message, agent_session_status, agent_session_approve, agent_session_reject y agent_session_close; preflight fallido en Portal no inicializa el modelo ni modifica archivos; asn setup --repo Portal --clients all es idempotente; Codex, Claude y OpenCode detectan asn-agent y specnative."]
 ```
 
 Construir el CLI Python del piloto con ToolCallingAgent, MCP por stdio, propuesta estructurada, confirmación de escrituras, historial opcional y comando /template explícito.
