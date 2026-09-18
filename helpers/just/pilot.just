@@ -40,10 +40,10 @@ clean:
     just _run_pilot clean
 
 run *args:
-    just _run_pilot run -- {{args}}
+    just _run_pilot run {{args}}
 
 batch *args:
-    just _run_pilot batch -- {{args}}
+    just _run_pilot batch {{args}}
 
 man target:
     bash "helpers/shell/pilot.sh" --workspace "{{workspace}}" --man "{{target}}"

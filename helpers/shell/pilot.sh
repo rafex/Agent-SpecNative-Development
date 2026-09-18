@@ -138,7 +138,10 @@ case "$goal" in
         if [[ "$goal" == "batch" ]]; then
             question_mode="batch"
         fi
-        exec "$agent" --repo "$workspace" --question-mode "$question_mode" "${run_args[@]}"
+        if (( ${#run_args[@]} > 0 )); then
+            exec "$agent" --repo "$workspace" --question-mode "$question_mode" "${run_args[@]}"
+        fi
+        exec "$agent" --repo "$workspace" --question-mode "$question_mode"
         ;;
     *)
         echo "Goal desconocido: $goal" >&2
