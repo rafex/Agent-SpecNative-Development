@@ -1,0 +1,13 @@
+# Project-scoped SpecNative MCP configuration for Codex.
+# Absolute paths keep the local server independent of the launch directory.
+
+[mcp_servers.specnative]
+command = "/Users/rafex/repository/github/rafex/Agent-SpecNative-Development/.specnative/.venv/bin/python3"
+args = [
+  "/Users/rafex/repository/github/rafex/Agent-SpecNative-Development/.specnative/specnative_mcp.py",
+  "--repo",
+  "/Users/rafex/repository/github/rafex/Agent-SpecNative-Development"
+]
+cwd = "/Users/rafex/repository/github/rafex/Agent-SpecNative-Development"
+enabled = true
+startup_timeout_sec = 30
