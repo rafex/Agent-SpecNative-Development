@@ -1,10 +1,9 @@
-# `just asn`
+# `asn`
 
 ## Propósito
 
 Inicia el piloto interactivo de SpecNative usando el repositorio actual como
-destino. El proyecto aporta el `Justfile` y el adaptador; el agente y el MCP
-se mantienen fuera del proyecto.
+destino. No requiere `Justfile` ni archivos de integración en el proyecto.
 
 ## Configuración
 
@@ -13,13 +12,12 @@ export SPECNATIVE_AGENT_MODEL="nombre-del-modelo"
 export OPENAI_API_KEY="..."
 ```
 
-El repositorio debe tener contexto SpecNative válido. `just asn` ejecuta el
+El repositorio debe tener contexto SpecNative válido. `asn` ejecuta el
 preflight antes de iniciar el modelo y termina sin escribir si falla.
 
 ## Uso
 
 ```bash
-just asn
 asn --repo .
 asn-mcp --repo .         # MCP para Codex, Claude u OpenCode
 ```
@@ -59,18 +57,13 @@ rm -rf ~/.cache/asn/mcp
 ```
 
 Para construir el paquete distribuible usa `make build`, que ejecuta `uv
-build`. `just asn` es sólo un adaptador opcional que delega en ese ejecutable.
+build`. Los clientes con skills se conectan mediante `asn-mcp --repo .`.
 
 Dentro de la sesión, `/template nombre` es la única forma de solicitar una
 plantilla y siempre requiere confirmación explícita.
 
 ## Instalación
 
-Desde el repositorio del agente:
-
-```bash
-bash helpers/shell/install-agent-specnative.sh /ruta/al/proyecto
-```
-
-El instalador es idempotente para una integración existente y rechaza una
-colisión con una receta `asn` o un adaptador local diferente.
+Desde el repositorio del agente ejecuta `make install`. Después, configura la
+skill y el MCP del cliente que utilices; el proyecto consumidor no necesita
+`Justfile`.
