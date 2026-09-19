@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from secrets import token_urlsafe
 from typing import Any, Callable
@@ -231,17 +231,7 @@ class SessionManager:
     def start(self, initiative: str | None, question_mode: str | None = None) -> dict[str, Any]:
         config = self.config
         if question_mode:
-            config = Config(
-                config.repo,
-                config.model,
-                config.api_base,
-                config.api_key_env,
-                question_mode,
-                config.history,
-                config.max_steps,
-                config.mcp_python,
-                config.mcp_script,
-            )
+            config = replace(config, question_mode=question_mode)
         try:
             session = AgentSession.create(config, initiative)
         except InitiativeRequired as error:

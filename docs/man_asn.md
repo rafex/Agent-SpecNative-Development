@@ -12,6 +12,33 @@ export SPECNATIVE_AGENT_MODEL="nombre-del-modelo"
 export OPENAI_API_KEY="..."
 ```
 
+Para guardar las credenciales sin exportarlas en cada terminal, elige uno de
+estos backends:
+
+```bash
+asn secrets init --repo . --backend sops
+asn secrets init --repo . --backend gopass
+```
+
+`sops` usa `.specnative/agent.secrets.yaml` cifrado con age. ASN necesita los
+binarios `sops` y `age`, y respeta `.sops.yaml` o `SOPS_AGE_RECIPIENTS`.
+Descifra el documento sólo en memoria.
+
+`gopass` usa `.specnative/agent.gopass.toml`, que contiene referencias y no
+secretos. El comando de inicialización muestra los `gopass insert` necesarios.
+
+Con el backend `auto` (predeterminado), ASN busca SOPS, después gopass y por
+último las variables de entorno. Si detecta un archivo de secretos pero no
+puede leerlo, termina con error y no cambia silenciosamente de backend.
+
+También puedes seleccionar el backend por ejecución:
+
+```bash
+asn --repo . --secrets-backend sops
+asn --repo . --secrets-backend gopass
+asn --repo . --secrets-backend none
+```
+
 El repositorio debe tener contexto SpecNative válido. `asn` ejecuta el
 preflight antes de iniciar el modelo y termina sin escribir si falla.
 

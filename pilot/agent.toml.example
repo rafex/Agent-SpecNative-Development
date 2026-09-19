@@ -10,3 +10,10 @@ max_steps = 12
 [mcp]
 python = ".specnative/.venv/bin/python"
 script = ".specnative/specnative_mcp.py"
+
+# Optional secure credential providers. With backend = "auto", ASN checks
+# agent.secrets.yaml, then agent.gopass.toml, then the legacy environment.
+[secrets]
+backend = "auto"
+file = ".specnative/agent.secrets.yaml"
+gopass_file = ".specnative/agent.gopass.toml"

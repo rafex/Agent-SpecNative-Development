@@ -118,7 +118,7 @@ case "$goal" in
     help)
         echo "SpecNative Agent Pilot"
         echo "  setup    Sincronizar el entorno con uv.lock"
-        echo "  install  Instalar asn y asn-mcp como herramientas uv"
+        echo "  install  Instalar asn, asn-mcp y asn-agent-mcp como herramientas uv"
         echo "  build    Construir el paquete wheel/sdist con uv"
         echo "  test     Ejecutar la suite de pruebas"
         echo "  compile  Verificar compilación de Python"

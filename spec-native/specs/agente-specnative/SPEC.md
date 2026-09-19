@@ -6,7 +6,7 @@ id            = "SPEC-0001"
 state         = "active"
 owner         = "rafex"
 created_at    = "2026-09-17"
-updated_at    = "2026-09-17"
+updated_at    = "2026-09-18"
 replaces      = "none"
 related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006"]
 related_decisions = []
@@ -69,6 +69,9 @@ Excluye:
   validación al finalizar cada operación.
 - RF-6: El proveedor de modelo debe poder sustituirse sin cambiar el núcleo de
   conversación ni el adaptador SpecNative.
+- RF-7: El agente debe poder resolver modelo, endpoint y API key desde un
+  archivo SOPS/age o referencias gopass, manteniendo variables de entorno como
+  compatibilidad y sin escribir secretos descifrados al repositorio.
 
 ## Requisitos no funcionales
 
@@ -110,6 +113,8 @@ Excluye:
   adaptador mínimo antes de convertirla en decisión persistente.
 - La detección de intención debe distinguir con precisión una petición de
   ayuda de una orden explícita de plantilla.
+- Los binarios externos `sops`, `age` y `gopass` son opcionales; sólo se
+  requieren cuando el backend correspondiente se configura o autodetecta.
 
 ## Plan de validación
 

@@ -20,3 +20,10 @@ Para integrar un proyecto con Codex, Claude y OpenCode sin usar Just:
 ```bash
 asn setup --repo /ruta/al/proyecto --clients all
 ```
+
+Las credenciales pueden configurarse por proyecto sin variables de entorno:
+
+```bash
+asn secrets init --repo /ruta/al/proyecto --backend sops
+asn secrets init --repo /ruta/al/proyecto --backend gopass
+```

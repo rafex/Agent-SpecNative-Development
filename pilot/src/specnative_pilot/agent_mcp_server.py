@@ -76,13 +76,24 @@ def main() -> None:
     parser.add_argument("--config", type=Path, help="Archivo .specnative/agent.toml alternativo")
     parser.add_argument("--mcp-python", type=Path, help="Python que ejecuta el MCP SpecNative externo")
     parser.add_argument("--mcp-script", type=Path, help="Script del MCP SpecNative externo")
+    parser.add_argument("--secrets-backend", choices=["auto", "none", "sops", "gopass"])
+    parser.add_argument("--secrets-file", type=Path, help="Archivo SOPS de credenciales")
+    parser.add_argument("--gopass-file", type=Path, help="Archivo de referencias gopass")
     parser.add_argument("--transport", choices=["stdio", "sse"], default="stdio")
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
     if (args.mcp_python is None) != (args.mcp_script is None):
         parser.error("--mcp-python y --mcp-script deben proporcionarse juntas")
     repo = args.repo.resolve()
-    config = load_config(repo, args.config, mcp_python=args.mcp_python, mcp_script=args.mcp_script)
+    config = load_config(
+        repo,
+        args.config,
+        mcp_python=args.mcp_python,
+        mcp_script=args.mcp_script,
+        secrets_backend=args.secrets_backend,
+        secrets_file=args.secrets_file,
+        gopass_file=args.gopass_file,
+    )
     server = create_server(config)
     if args.transport == "sse":
         server.run(transport="sse", port=args.port)

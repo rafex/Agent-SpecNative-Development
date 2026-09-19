@@ -14,3 +14,7 @@ __pycache__/
 
 # Optional pilot conversation history is local state
 .specnative/agent/sessions/
+
+# Never commit decrypted secret material
+.specnative/agent.secrets.dec.*
+.specnative/*.decrypted.*

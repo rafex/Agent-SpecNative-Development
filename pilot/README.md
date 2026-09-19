@@ -12,12 +12,26 @@ Desde la raíz del repositorio, usando el Python 3.14 de Homebrew:
 ./.specnative/.venv/bin/python -m pip install -e 'pilot[dev]'
 ```
 
-Configura un modelo compatible con la API de OpenAI:
+Configura un modelo compatible con la API de OpenAI (la forma tradicional):
 
 ```bash
 export SPECNATIVE_AGENT_MODEL='nombre-del-modelo'
 export OPENAI_API_KEY='...'
 ```
+
+También puedes evitar variables de entorno. ASN autodetecta primero el archivo
+cifrado `.specnative/agent.secrets.yaml` con SOPS/age y después las referencias
+`.specnative/agent.gopass.toml`:
+
+```bash
+asn secrets init --repo . --backend sops
+asn secrets init --repo . --backend gopass
+```
+
+SOPS descifra sólo en memoria. La API key nunca se escribe descifrada. Para
+gopass, `asn secrets init` crea las referencias y muestra los comandos
+`gopass insert` que debes ejecutar. Si no existe ningún backend, se conservan
+las variables de entorno como compatibilidad.
 
 Ejecuta el piloto:
 
@@ -39,7 +53,8 @@ servidor SpecNative directo para diagnóstico. `asn setup` instala las skills y
 configuraciones de Codex, Claude y OpenCode sin tocar el `Justfile`.
 
 También puedes copiar `agent.toml.example` a `.specnative/agent.toml` para
-configurar el modelo, el modo de preguntas, el historial y el comando MCP.
+configurar el modelo, el modo de preguntas, el historial, el comando MCP y el
+backend de credenciales.
 
 ## Política del piloto
 

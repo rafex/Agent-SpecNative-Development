@@ -48,6 +48,13 @@ export SPECNATIVE_AGENT_MODEL="nombre-del-modelo"
 export OPENAI_API_KEY="..."
 ```
 
+Como alternativa, configura credenciales por proyecto con SOPS/age o gopass:
+
+```bash
+asn secrets init --repo . --backend sops
+asn secrets init --repo . --backend gopass
+```
+
 Después abre el cliente desde el proyecto:
 
 ```bash

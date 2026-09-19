@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .mcp_discovery import find_local_mcp
+from .secrets import DEFAULT_GOPASS_FILE, DEFAULT_SOPS_FILE, SECRET_BACKENDS
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,9 @@ class Config:
     max_steps: int
     mcp_python: Path | None
     mcp_script: Path | None
+    secrets_backend: str = "auto"
+    secrets_file: Path | None = None
+    gopass_file: Path | None = None
 
 
 def load_config(
@@ -27,6 +31,9 @@ def load_config(
     question_mode: str | None = None,
     mcp_python: Path | None = None,
     mcp_script: Path | None = None,
+    secrets_backend: str | None = None,
+    secrets_file: Path | None = None,
+    gopass_file: Path | None = None,
 ) -> Config:
     raw: dict = {}
     path = config_path or repo / ".specnative" / "agent.toml"
@@ -35,6 +42,9 @@ def load_config(
             raw = tomllib.load(handle)
     agent = raw.get("agent", {})
     mcp = raw.get("mcp", {})
+    secrets = raw.get("secrets", {})
+    if not isinstance(secrets, dict):
+        raise ValueError("[secrets] debe ser una tabla")
     configured_mcp = find_local_mcp(repo) is None
     python_value = mcp_python if mcp_python is not None else (mcp.get("python") if configured_mcp else None)
     script_value = mcp_script if mcp_script is not None else (mcp.get("script") if configured_mcp else None)
@@ -46,6 +56,23 @@ def load_config(
         python_path = repo / python_path
     if script_path is not None and not script_path.is_absolute():
         script_path = repo / script_path
+    backend = secrets_backend if secrets_backend is not None else secrets.get("backend", "auto")
+    if backend not in SECRET_BACKENDS:
+        raise ValueError(f"Backend de secretos inválido: {backend}")
+
+    def resolve_path(value: Path | str | None, default: Path) -> Path:
+        path_value = value if value is not None else default
+        path = Path(path_value)
+        return path if path.is_absolute() else repo / path
+
+    resolved_secrets_file = resolve_path(
+        secrets_file if secrets_file is not None else secrets.get("file"),
+        DEFAULT_SOPS_FILE,
+    )
+    resolved_gopass_file = resolve_path(
+        gopass_file if gopass_file is not None else secrets.get("gopass_file"),
+        DEFAULT_GOPASS_FILE,
+    )
     return Config(
         repo=repo,
         model=os.getenv("SPECNATIVE_AGENT_MODEL", agent.get("model", "")),
@@ -56,4 +83,7 @@ def load_config(
         max_steps=int(agent.get("max_steps", 12)),
         mcp_python=python_path,
         mcp_script=script_path,
+        secrets_backend=backend,
+        secrets_file=resolved_secrets_file,
+        gopass_file=resolved_gopass_file,
     )
