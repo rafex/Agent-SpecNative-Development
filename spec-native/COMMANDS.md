@@ -47,6 +47,20 @@ make build
 # o: just build
 ```
 
+## Documentación
+
+```bash
+make serve  # Servir el sitio MkDocs localmente
+make docs   # Construir el sitio estricto en site/
+
+# Las mismas tareas están disponibles con Just:
+just serve
+just docs
+```
+
+La configuración y las dependencias viven en `.config/mkdocs/`; las páginas
+fuente están en `docs/`. `site/` es salida generada y no se versiona.
+
 ## Manuales
 
 Cada tarea tiene un manual en `docs/man_<tarea>.md`:

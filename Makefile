@@ -13,3 +13,4 @@ PROJECT_NAME ?= specnative-agent-pilot
 LOG_FILE ?= /var/log/$(PROJECT_NAME)/log-make-$(shell date -u +%Y%m%dT%H%M%SZ).log
 
 include helpers/mk/pilot.mk
+include helpers/mk/docs.mk

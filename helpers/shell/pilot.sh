@@ -126,6 +126,8 @@ case "$goal" in
         echo "  clean    Limpiar caches generadas"
         echo "  run      Iniciar el CLI interactivo"
         echo "  batch    Iniciar el CLI en modo de preguntas por bloques"
+        echo "  docs     Construir el sitio MkDocs"
+        echo "  serve    Servir localmente el sitio MkDocs"
         ;;
     setup)
         require_uv

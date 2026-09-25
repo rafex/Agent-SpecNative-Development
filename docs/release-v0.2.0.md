@@ -1,3 +1,9 @@
+---
+title: ASN v0.2.0
+description: Notas de publicación de ASN versión 0.2.0.
+tags: [release, asn]
+---
+
 # ASN v0.2.0
 
 Primera versión distribuible del agente ASN con integración MCP para Codex,

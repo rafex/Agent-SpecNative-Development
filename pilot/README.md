@@ -3,6 +3,10 @@
 Piloto interactivo en Python para evaluar la experiencia del agente antes de
 migrarlo a Rust con Rig y rmcp.
 
+La documentación del sitio está en `docs/`: consulta el [inicio rápido](../docs/getting-started.md),
+la [guía de uso](../docs/using-agent.md) y la [guía de desarrollo](../docs/development.md).
+Sirve o construye el sitio desde la raíz con `make serve` o `make docs`.
+
 ## Setup
 
 Desde la raíz del repositorio, usando el Python 3.14 de Homebrew:

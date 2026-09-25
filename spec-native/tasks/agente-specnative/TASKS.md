@@ -168,3 +168,23 @@ completion_evidence = ["make install BIN_DIR=/home/rafex/.local/bin: instalació
 ```
 
 Manejar KeyboardInterrupt durante la autenticación interactiva para salir sin traceback ni presentar la interrupción del usuario como fallo; verificar que interrumpir la captura no escriba credenciales.
+
+### TASK-AGENTE-SPECNATIV-0009 - Documentar uso y desarrollo del agente ASN con MkDocs
+
+> **Update 2026-09-25T19:57:35Z:** Implementando el sitio MkDocs Material y las guías en español de uso del agente y desarrollo del piloto.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0009"
+title = "Documentar uso y desarrollo del agente ASN con MkDocs"
+state = "done"
+priority = "p1"
+owner = "rafex"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "El sitio MkDocs Material contiene portada, inicio rápido, guía de uso y guía de desarrollo que cubren instalación, credenciales, integración MCP, propuesta/aprobación/rechazo, plantillas explícitas, workflow SpecNative, comandos y validación. Los manuales existentes quedan enlazados sin duplicar su contenido; el sitio compila con la navegación configurada y site/ está ignorado por Git."
+validation = ["mkdocs build --strict -f .config/mkdocs/mkdocs.yml", "Verificar manualmente la navegación y los enlaces internos de las guías"]
+completion_evidence = ["`make docs` ejecutó `mkdocs build --strict --config-file .config/mkdocs/mkdocs.yml` sin errores; `just --list` muestra docs y serve; se comprobó frontmatter en todos los docs/*.md, `git check-ignore site/index.html` excluye la salida, y `git diff --check` pasa."]
+```
+
+Crear guías en español para instalar/configurar ASN, usar correctamente el flujo del agente y contribuir/desarrollar el piloto; añadir un sitio MkDocs Material con comandos locales docs y serve.

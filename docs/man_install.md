@@ -1,3 +1,9 @@
+---
+title: install
+description: Instala los comandos ASN como herramientas de usuario.
+tags: [referencia, asn, instalacion]
+---
+
 # install
 
 Instala `asn`, `asn-mcp` y `asn-agent-mcp` como herramientas de `uv`, sin

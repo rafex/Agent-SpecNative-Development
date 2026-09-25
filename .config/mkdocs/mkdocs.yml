@@ -1,0 +1,50 @@
+site_name: ASN — Agente SpecNative
+site_description: Guías para usar y desarrollar el agente ASN.
+site_url: https://rafex.github.io/Agent-SpecNative-Development/
+repo_name: rafex/Agent-SpecNative-Development
+repo_url: https://github.com/rafex/Agent-SpecNative-Development
+
+docs_dir: ../../docs
+site_dir: ../../site
+strict: true
+theme:
+  name: material
+  language: es
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - meta
+  - pymdownx.details
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+
+nav:
+  - Inicio: index.md
+  - Primeros pasos: getting-started.md
+  - Guía de uso: using-agent.md
+  - Desarrollo: development.md
+  - Referencia:
+      - CLI y configuración: man_asn.md
+      - Setup: man_setup.md
+      - Ejecutar: man_run.md
+      - Modo por bloques: man_batch.md
+      - Instalar: man_install.md
+      - Construir: man_build.md
+      - Pruebas: man_test.md
+      - Compilar: man_compile.md
+      - Validar: man_check.md
+      - Limpiar: man_clean.md
+      - Ayuda: man_help.md
+      - Manuales: man_man.md
+      - Tarea predeterminada: man_default.md
+      - Construir documentación: man_docs.md
+      - Servir documentación: man_serve.md
+  - Cambios:
+      - Release 0.2.0: release-v0.2.0.md

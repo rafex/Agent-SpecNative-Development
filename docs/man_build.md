@@ -1,3 +1,9 @@
+---
+title: build
+description: Construye el paquete distribuible del piloto.
+tags: [referencia, asn, desarrollo]
+---
+
 # build
 
 Construye el piloto instalándolo en modo editable. La operación se delega al

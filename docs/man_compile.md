@@ -1,3 +1,9 @@
+---
+title: compile
+description: Comprueba la compilación de los módulos Python.
+tags: [referencia, asn, desarrollo]
+---
+
 # compile
 
 Verifica que el código Python del piloto y el servidor MCP compilen sin errores.
