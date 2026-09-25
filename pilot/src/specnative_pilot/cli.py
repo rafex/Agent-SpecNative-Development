@@ -6,7 +6,8 @@ from pathlib import Path
 from .config import load_config
 from .controller import Controller
 from .mcp_discovery import resolve_project_repo
-from .secret_setup import SecretSetupError, initialize_secrets
+from .secret_setup import SecretSetupError, authenticate, initialize_secrets
+from .secrets import SecretResolutionError, credential_setup_message, missing_credential_names, resolve_credentials
 
 
 def main(preflight_default: bool = False) -> int:
@@ -14,6 +15,7 @@ def main(preflight_default: bool = False) -> int:
     parser.add_argument("command", nargs="?", choices=["setup", "secrets"], help="Acción administrativa del proyecto")
     parser.add_argument("subcommand", nargs="?", choices=["init"], help="Subcomando administrativo")
     parser.add_argument("--repo", type=Path, help="Repositorio destino (por defecto, cwd o su proyecto SpecNative)")
+    parser.add_argument("--auth", action="store_true", help="Configura credenciales ASN cifradas con SOPS/age")
     parser.add_argument("--clients", choices=["all", "codex", "claude", "opencode"], default="all")
     parser.add_argument("--backend", choices=["sops", "gopass"], help="Backend para `asn secrets init`")
     parser.add_argument("--prefix", help="Prefijo de referencias para gopass")
@@ -32,6 +34,28 @@ def main(preflight_default: bool = False) -> int:
         help="Valida el contexto antes de iniciar el modelo",
     )
     args = parser.parse_args()
+    if args.auth:
+        if args.command is not None or args.subcommand is not None:
+            parser.error("`--auth` no se combina con otro comando")
+        try:
+            changed, cancelled = authenticate(
+                args.repo,
+                confirm_replace=lambda prompt: input(f"{prompt} [s/N] ").strip().lower() in {"s", "si", "sí", "y", "yes"},
+            )
+        except KeyboardInterrupt:
+            print("\nAutenticación cancelada.")
+            return 0
+        except (OSError, SecretSetupError, ValueError) as error:
+            print(f"Error configurando autenticación ASN: {error}")
+            return 2
+        if cancelled:
+            print("Autenticación cancelada; no se modificó ningún archivo.")
+            return 0
+        scope = f"el proyecto {args.repo.resolve()}" if args.repo else "tu usuario"
+        print(f"Credenciales ASN cifradas para {scope}.")
+        for path in changed:
+            print(f"- {path}")
+        return 0
     if args.command == "secrets":
         if args.subcommand != "init":
             parser.error("usa `asn secrets init --backend sops|gopass`")
@@ -90,6 +114,16 @@ def main(preflight_default: bool = False) -> int:
         args.secrets_file,
         args.gopass_file,
     )
+    try:
+        credentials = resolve_credentials(config)
+        missing = missing_credential_names(config, credentials)
+        if missing:
+            print(credential_setup_message(missing, config.api_key_env))
+            return 2
+    except SecretResolutionError as error:
+        print(f"No se pudieron resolver las credenciales ASN: {error}")
+        print("Revisa el backend configurado o ejecuta `asn --auth` para configurarlo.")
+        return 2
     try:
         return Controller(config).run(args.initiative, preflight=args.preflight)
     except KeyboardInterrupt:

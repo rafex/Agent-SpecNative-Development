@@ -6,10 +6,10 @@ id            = "SPEC-0001"
 state         = "active"
 owner         = "rafex"
 created_at    = "2026-09-17"
-updated_at    = "2026-09-18"
+updated_at    = "2026-09-25"
 replaces      = "none"
-related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006"]
-related_decisions = []
+related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006", "TASK-AGENTE-SPECNATIV-0007", "TASK-AGENTE-SPECNATIV-0008"]
+related_decisions = ["DEC-0001"]
 artifacts     = ["pilot/", ".specnative/specnative_mcp.py"]
 validation    = ["cargo test", "specnative validate", "walkthrough de conversación"]
 ```
@@ -72,6 +72,10 @@ Excluye:
 - RF-7: El agente debe poder resolver modelo, endpoint y API key desde un
   archivo SOPS/age o referencias gopass, manteniendo variables de entorno como
   compatibilidad y sin escribir secretos descifrados al repositorio.
+- RF-8: El CLI debe validar modelo y API key antes de iniciar; si faltan, debe
+  explicar las variables de entorno aceptadas y ofrecer `asn --auth`. La
+  autenticación debe cifrar credenciales SOPS/age globales o por proyecto,
+  creando una identidad age de usuario si no existe.
 
 ## Requisitos no funcionales
 
@@ -102,6 +106,20 @@ Excluye:
 - Dado un proveedor de modelo alternativo que cumple el adaptador definido,
   cuando se configura, entonces el flujo de definición conserva el mismo
   comportamiento SpecNative.
+- Dado que faltan el modelo o la API key, cuando se inicia `asn` o una sesión
+  MCP, entonces se informa qué configuración falta y se sugiere `asn --auth`
+  sin imprimir valores secretos ni iniciar el modelo.
+- Dado que el usuario ejecuta `asn --auth`, cuando proporciona modelo, API
+  base opcional y API key, entonces ASN cifra las credenciales a nivel global;
+  con `--repo <ruta>` las cifra para ese proyecto. Una identidad nueva se crea
+  en `~/.age/asn-key.txt`, y los archivos existentes sólo se reemplazan tras
+  confirmación explícita.
+- Dado que no están instalados SOPS o age, cuando se ejecuta `asn --auth`,
+  entonces ASN presenta instrucciones de instalación y no instala paquetes ni
+  escribe credenciales.
+- Dado que el usuario interrumpe `asn --auth` con Ctrl+C durante la captura,
+  entonces ASN informa que la autenticación se canceló sin traceback ni crear
+  el archivo de credenciales.
 
 ## Dependencias y riesgos
 

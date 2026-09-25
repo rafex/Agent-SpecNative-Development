@@ -13,6 +13,7 @@ from .intent import parse_template_command
 from .mcp import SpecNativeMcp
 from .model import build_model
 from .models import Proposal
+from .secrets import SecretResolutionError, credential_setup_message, missing_credential_names, resolve_credentials
 from .templates import spec_template_names
 
 
@@ -232,6 +233,19 @@ class SessionManager:
         config = self.config
         if question_mode:
             config = replace(config, question_mode=question_mode)
+        try:
+            credentials = resolve_credentials(config)
+            missing = missing_credential_names(config, credentials)
+            if missing:
+                return {
+                    "status": "credentials_missing",
+                    "text": credential_setup_message(missing, config.api_key_env),
+                }
+        except SecretResolutionError as error:
+            return {
+                "status": "credentials_error",
+                "text": f"No se pudieron resolver las credenciales ASN: {error}. Revisa el backend o ejecuta `asn --auth`.",
+            }
         try:
             session = AgentSession.create(config, initiative)
         except InitiativeRequired as error:

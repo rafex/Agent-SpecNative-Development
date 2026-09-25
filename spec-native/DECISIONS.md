@@ -23,7 +23,6 @@ registrada condiciona el diseno o la implementacion.
 
 ## Decisiones
 
-El CLI o MCP regeneran esta sección desde el front matter de `decisions/`.
-
 | ID | Estado | Título | Tags |
 | --- | --- | --- | --- |
+| [DEC-0001](./decisions/DEC-0001-credenciales-asn-globales-y-por-proyecto-con-sop.md) | accepted | Credenciales ASN globales y por proyecto con SOPS/age | asn, credentials, sops, age |

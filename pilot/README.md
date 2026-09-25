@@ -19,6 +19,18 @@ export SPECNATIVE_AGENT_MODEL='nombre-del-modelo'
 export OPENAI_API_KEY='...'
 ```
 
+Si faltan estas credenciales, `asn` informa qué valores necesita y sugiere el
+comando de configuración cifrada. Ejecuta `asn --auth` para configurar las
+credenciales de tu usuario o `asn --auth --repo .` para limitar la configuración
+al proyecto actual. El asistente solicita el modelo, una API base opcional y
+una API key oculta; guarda los valores cifrados con SOPS y age. Si hace falta,
+crea la identidad age en `~/.age/asn-key.txt`. Si faltan `sops` o `age`, muestra
+instrucciones de instalación y termina sin instalar paquetes.
+
+En clientes MCP como OpenCode, configura las credenciales antes de iniciar el
+cliente o usa el archivo cifrado del proyecto. El inicio de sesión MCP no es
+interactivo y recomienda `asn --auth` cuando faltan valores.
+
 También puedes evitar variables de entorno. ASN autodetecta primero el archivo
 cifrado `.specnative/agent.secrets.yaml` con SOPS/age y después las referencias
 `.specnative/agent.gopass.toml`:
@@ -28,8 +40,10 @@ asn secrets init --repo . --backend sops
 asn secrets init --repo . --backend gopass
 ```
 
-SOPS descifra sólo en memoria. La API key nunca se escribe descifrada. Para
-gopass, `asn secrets init` crea las referencias y muestra los comandos
+SOPS descifra sólo en memoria. La API key nunca se escribe descifrada. ASN
+resuelve primero los secretos configurados del proyecto, después las
+credenciales SOPS globales y finalmente el entorno. Para gopass, `asn secrets init`
+crea las referencias y muestra los comandos
 `gopass insert` que debes ejecutar. Si no existe ningún backend, se conservan
 las variables de entorno como compatibilidad.
 

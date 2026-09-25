@@ -7,12 +7,21 @@ from types import SimpleNamespace
 import pytest
 
 from specnative_pilot.config import load_config
-from specnative_pilot.secret_setup import initialize_secrets
-from specnative_pilot.secrets import SecretResolutionError, resolve_credentials
+from specnative_pilot.secret_setup import SecretToolsMissingError, authenticate, initialize_secrets
+from specnative_pilot.secrets import (
+    SecretResolutionError,
+    global_sops_file,
+    resolve_credentials,
+)
 
 
 def _result(stdout: str = "", returncode: int = 0) -> SimpleNamespace:
     return SimpleNamespace(stdout=stdout, stderr="", returncode=returncode)
+
+
+@pytest.fixture(autouse=True)
+def isolated_user_config(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
 
 
 def test_environment_is_legacy_fallback(tmp_path, monkeypatch):
@@ -91,6 +100,65 @@ def test_sops_is_autodetected_before_gopass(tmp_path, monkeypatch):
     assert resolve_credentials(load_config(tmp_path)).api_key == "sops-key"
 
 
+def test_global_sops_is_used_when_project_has_no_secret_file(tmp_path, monkeypatch):
+    global_file = global_sops_file()
+    global_file.parent.mkdir(parents=True)
+    global_file.write_text("encrypted", encoding="utf-8")
+    monkeypatch.setenv("SPECNATIVE_AGENT_MODEL", "env-model")
+    monkeypatch.setenv("OPENAI_API_KEY", "env-key")
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return _result(json.dumps({"model": "global-model", "api_key": "global-key"}))
+
+    monkeypatch.setattr("specnative_pilot.secrets.shutil.which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr("specnative_pilot.secrets.subprocess.run", fake_run)
+    credentials = resolve_credentials(load_config(tmp_path))
+    assert credentials.model == "global-model"
+    assert credentials.api_key == "global-key"
+    assert calls[0][-1] == str(global_file)
+
+
+def test_sops_decryption_uses_asn_age_identity_when_present(tmp_path, monkeypatch):
+    secret_file = tmp_path / ".specnative/agent.secrets.yaml"
+    secret_file.parent.mkdir()
+    secret_file.write_text("encrypted", encoding="utf-8")
+    identity = tmp_path / ".age/asn-key.txt"
+    identity.parent.mkdir()
+    identity.write_text("AGE-SECRET-KEY-test", encoding="utf-8")
+    monkeypatch.setattr("specnative_pilot.secrets.AGE_IDENTITY_FILE", identity)
+    captured = {}
+    monkeypatch.setattr("specnative_pilot.secrets.shutil.which", lambda name: f"/bin/{name}")
+
+    def fake_run(command, **kwargs):
+        captured.update(kwargs)
+        return _result(json.dumps({"model": "model", "api_key": "key"}))
+
+    monkeypatch.setattr("specnative_pilot.secrets.subprocess.run", fake_run)
+    resolve_credentials(load_config(tmp_path))
+    assert captured["env"]["SOPS_AGE_KEY_FILE"] == str(identity)
+
+
+def test_project_secrets_take_precedence_over_global_sops(tmp_path, monkeypatch):
+    project_file = tmp_path / ".specnative/agent.secrets.yaml"
+    project_file.parent.mkdir()
+    project_file.write_text("project encrypted", encoding="utf-8")
+    global_file = global_sops_file()
+    global_file.parent.mkdir(parents=True)
+    global_file.write_text("global encrypted", encoding="utf-8")
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return _result(json.dumps({"model": "project-model", "api_key": "project-key"}))
+
+    monkeypatch.setattr("specnative_pilot.secrets.shutil.which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr("specnative_pilot.secrets.subprocess.run", fake_run)
+    assert resolve_credentials(load_config(tmp_path)).model == "project-model"
+    assert calls[0][-1] == str(project_file)
+
+
 def test_none_backend_uses_environment_even_when_files_exist(tmp_path, monkeypatch):
     secret_file = tmp_path / ".specnative/agent.secrets.yaml"
     secret_file.parent.mkdir()
@@ -133,7 +201,7 @@ def test_sops_init_encrypts_in_memory_and_updates_config(tmp_path, monkeypatch):
     assert (tmp_path / ".specnative/agent.secrets.yaml").read_text(encoding="utf-8") == "sops: encrypted output\n"
     assert "secret-key" not in (tmp_path / ".specnative/agent.secrets.yaml").read_text(encoding="utf-8")
     assert calls[0][0] == [
-        "sops",
+        "/bin/sops",
         "encrypt",
         "--input-type",
         "json",
@@ -141,5 +209,108 @@ def test_sops_init_encrypts_in_memory_and_updates_config(tmp_path, monkeypatch):
         "yaml",
         "--filename-override",
         str(tmp_path / ".specnative/agent.secrets.yaml"),
+        "/dev/stdin",
     ]
     assert "secret-key" in calls[0][1]["input"]
+
+
+def test_auth_creates_global_sops_file_and_age_identity(tmp_path, monkeypatch):
+    identity = tmp_path / ".age/asn-key.txt"
+    monkeypatch.setattr("specnative_pilot.secret_setup.AGE_IDENTITY_FILE", identity)
+    monkeypatch.setattr("specnative_pilot.secret_setup.shutil.which", lambda name: f"/bin/{name}")
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        if command[1:2] == ["-o"]:
+            Path(command[2]).write_text("AGE-SECRET-KEY-test\n", encoding="utf-8")
+            return _result()
+        if command[1:2] == ["-y"]:
+            return _result("age1recipient\n")
+        return _result("sops: encrypted output\n")
+
+    monkeypatch.setattr("specnative_pilot.secret_setup.subprocess.run", fake_run)
+    changed, cancelled = authenticate(
+        None,
+        confirm_replace=lambda _: pytest.fail("new auth must not ask to replace"),
+        input_fn=lambda prompt: "model-id" if prompt == "Modelo: " else "https://api.example/v1",
+        secret_input_fn=lambda _: "api-secret",
+    )
+    target = global_sops_file()
+    assert not cancelled
+    assert changed == [target]
+    assert target.read_text(encoding="utf-8") == "sops: encrypted output\n"
+    assert "api-secret" not in target.read_text(encoding="utf-8")
+    assert identity.read_text(encoding="utf-8") == "AGE-SECRET-KEY-test\n"
+    assert identity.stat().st_mode & 0o777 == 0o600
+    encrypt_call = calls[-1]
+    assert "--age" in encrypt_call[0]
+    assert "age1recipient" in encrypt_call[0]
+    assert encrypt_call[1]["env"]["SOPS_AGE_KEY_FILE"] == str(identity)
+    assert "api-secret" in encrypt_call[1]["input"]
+
+
+def test_auth_can_write_project_scoped_credentials(tmp_path, monkeypatch):
+    identity = tmp_path / "identity.txt"
+    identity.write_text("AGE-SECRET-KEY-test\n", encoding="utf-8")
+    monkeypatch.setattr("specnative_pilot.secret_setup.AGE_IDENTITY_FILE", identity)
+    monkeypatch.setattr("specnative_pilot.secret_setup.shutil.which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(
+        "specnative_pilot.secret_setup.subprocess.run",
+        lambda command, **kwargs: _result("age1recipient\n") if "-y" in command else _result("encrypted\n"),
+    )
+    changed, cancelled = authenticate(
+        tmp_path,
+        confirm_replace=lambda _: False,
+        input_fn=lambda _: "model",
+        secret_input_fn=lambda _: "key",
+    )
+    assert not cancelled
+    assert tmp_path / ".specnative/agent.secrets.yaml" in changed
+    assert tmp_path / ".specnative/agent.toml" in changed
+    assert 'backend = "sops"' in (tmp_path / ".specnative/agent.toml").read_text(encoding="utf-8")
+
+
+def test_auth_replacement_requires_confirmation(tmp_path, monkeypatch):
+    global_file = global_sops_file()
+    global_file.parent.mkdir(parents=True)
+    global_file.write_text("old encrypted data", encoding="utf-8")
+    monkeypatch.setattr("specnative_pilot.secret_setup.shutil.which", lambda _: pytest.fail("must not check tools"))
+    changed, cancelled = authenticate(
+        None,
+        confirm_replace=lambda _: False,
+        input_fn=lambda _: pytest.fail("must not prompt for credentials"),
+        secret_input_fn=lambda _: pytest.fail("must not prompt for API key"),
+    )
+    assert cancelled
+    assert changed == []
+    assert global_file.read_text(encoding="utf-8") == "old encrypted data"
+
+
+def test_auth_replaces_existing_global_file_after_confirmation(tmp_path, monkeypatch):
+    global_file = global_sops_file()
+    global_file.parent.mkdir(parents=True)
+    global_file.write_text("old encrypted data", encoding="utf-8")
+    identity = tmp_path / "identity.txt"
+    identity.write_text("AGE-SECRET-KEY-test", encoding="utf-8")
+    monkeypatch.setattr("specnative_pilot.secret_setup.AGE_IDENTITY_FILE", identity)
+    monkeypatch.setattr("specnative_pilot.secret_setup.shutil.which", lambda name: f"/bin/{name}")
+    monkeypatch.setattr(
+        "specnative_pilot.secret_setup.subprocess.run",
+        lambda command, **kwargs: _result("age1recipient\n") if "-y" in command else _result("new encrypted data\n"),
+    )
+    changed, cancelled = authenticate(
+        None,
+        confirm_replace=lambda _: True,
+        input_fn=lambda _: "model",
+        secret_input_fn=lambda _: "key",
+    )
+    assert not cancelled
+    assert changed == [global_file]
+    assert global_file.read_text(encoding="utf-8") == "new encrypted data\n"
+
+
+def test_auth_missing_tools_reports_install_guidance(tmp_path, monkeypatch):
+    monkeypatch.setattr("specnative_pilot.secret_setup.shutil.which", lambda name: None if name == "sops" else f"/bin/{name}")
+    with pytest.raises(SecretToolsMissingError, match="Instálalos y vuelve a ejecutar `asn --auth`"):
+        authenticate(None, confirm_replace=lambda _: False)

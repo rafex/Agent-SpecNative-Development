@@ -12,10 +12,13 @@ def build_model(config: Config) -> OpenAIServerModel:
     except SecretResolutionError as error:
         raise RuntimeError(str(error)) from error
     if not credentials.model:
-        raise RuntimeError("Configura el modelo en el backend de secretos, SPECNATIVE_AGENT_MODEL o [agent].model.")
+        raise RuntimeError(
+            "Falta el modelo ASN. Configura SPECNATIVE_AGENT_MODEL, [agent].model o ejecuta `asn --auth`."
+        )
     if not credentials.api_key:
         raise RuntimeError(
-            f"No existe una API key en el backend configurado ni en la variable {config.api_key_env}."
+            f"No existe una API key en el backend configurado ni en la variable {config.api_key_env}; "
+            "configúrala en el entorno o ejecuta `asn --auth`."
         )
     return OpenAIServerModel(
         model_id=credentials.model,

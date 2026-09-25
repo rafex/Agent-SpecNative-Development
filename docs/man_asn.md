@@ -12,6 +12,25 @@ export SPECNATIVE_AGENT_MODEL="nombre-del-modelo"
 export OPENAI_API_KEY="..."
 ```
 
+Al iniciar, `asn` comprueba que el modelo y la API key estén disponibles. Si
+faltan, indica las variables que se pueden exportar en el entorno de usuario o
+sistema y recomienda `asn --auth`.
+
+```bash
+asn --auth                  # credenciales globales del usuario
+asn --auth --repo .         # credenciales para el proyecto actual
+```
+
+El asistente solicita el modelo, una API base opcional y una API key oculta, y
+cifra los valores con SOPS/age. Las credenciales globales viven en
+`${XDG_CONFIG_HOME:-~/.config}/asn/agent.secrets.yaml`; las de proyecto, en
+`.specnative/agent.secrets.yaml`. La identidad age se crea una vez en
+`~/.age/asn-key.txt` con permisos privados. Si ya existe un archivo cifrado,
+ASN pide confirmación antes de reemplazarlo.
+
+Si faltan `sops` o `age`, ASN muestra cómo instalarlos para el sistema detectado
+y termina sin instalar paquetes.
+
 Para guardar las credenciales sin exportarlas en cada terminal, elige uno de
 estos backends:
 
@@ -27,7 +46,8 @@ Descifra el documento sólo en memoria.
 `gopass` usa `.specnative/agent.gopass.toml`, que contiene referencias y no
 secretos. El comando de inicialización muestra los `gopass insert` necesarios.
 
-Con el backend `auto` (predeterminado), ASN busca SOPS, después gopass y por
+Con el backend `auto` (predeterminado), ASN busca primero los secretos del
+proyecto (SOPS y luego gopass), después el archivo SOPS del usuario y por
 último las variables de entorno. Si detecta un archivo de secretos pero no
 puede leerlo, termina con error y no cambia silenciosamente de backend.
 

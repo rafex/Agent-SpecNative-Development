@@ -124,3 +124,47 @@ completion_evidence = ["pytest -q pilot/tests: 37 passed; uv lock --check --proj
 ```
 
 Construir el CLI Python del piloto con ToolCallingAgent, MCP por stdio, propuesta estructurada, confirmación de escrituras, historial opcional y comando /template explícito.
+
+### TASK-AGENTE-SPECNATIV-0007 - Guiar la configuración y autenticación de credenciales
+
+> **Update 2026-09-25T14:46:46Z:** Autenticación verificada además contra los binarios reales SOPS/age en un directorio temporal. Paquete reinstalado desde el checkout en ~/.local/bin.
+
+> **Update 2026-09-25T14:44:55Z:** Implementados validación de credenciales al iniciar, autenticación SOPS/age global y por proyecto, resolución proyecto → global → entorno y mensajes no interactivos para MCP.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0007"
+title = "Guiar la configuración y autenticación de credenciales"
+state = "done"
+priority = "p0"
+owner = "rafex"
+labels = []
+dependencies = ["TASK-AGENTE-SPECNATIV-0006"]
+expected_files = ["pilot/src/specnative_pilot/cli.py", "pilot/src/specnative_pilot/secrets.py", "pilot/src/specnative_pilot/secret_setup.py", "pilot/src/specnative_pilot/session.py", "pilot/tests/test_cli.py", "pilot/tests/test_secrets.py", "pilot/tests/test_session.py", "pilot/README.md", "docs/man_asn.md"]
+close_criteria = "asn valida credenciales antes de iniciar y explica cómo configurarlas; asn --auth cifra credenciales globales o por proyecto con SOPS/age, crea y protege la identidad ~/.age/asn-key.txt si falta, y MCP informa fallos sin solicitar entrada interactiva."
+validation = ["pytest -q pilot/tests", "compileall pilot/src"]
+completion_evidence = ["PYTHONPATH=pilot/src .specnative/.venv/bin/python -m pytest -q pilot/tests: 49 passed; compileall -q pilot/src .specnative/specnative_mcp.py: correcto; git diff --check: correcto; smoke real SOPS/age cifró y descifró credenciales globales desde un XDG_CONFIG_HOME temporal y generó una identidad con permisos 0600; `asn --help` instalado expone `--auth`."]
+```
+
+El archivo SOPS del proyecto tiene prioridad sobre el global y las variables de entorno quedan como fallback. `asn --auth` configura globalmente por defecto; `--repo` limita la autenticación al proyecto indicado.
+
+### TASK-AGENTE-SPECNATIV-0008 - Cancelar asn --auth limpiamente con Ctrl+C
+
+> **Update 2026-09-25T18:11:38Z:** `asn --auth` captura KeyboardInterrupt, muestra una cancelación normal y devuelve código 0. authenticate solicita modelo, endpoint y API key antes de crear/cifrar y escribir el archivo de credenciales. El ejecutable de usuario fue reinstalado.
+
+> **Update 2026-09-25T18:09:53Z:** Implementando salida limpia al recibir KeyboardInterrupt durante la autenticación.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0008"
+title = "Cancelar asn --auth limpiamente con Ctrl+C"
+state = "done"
+priority = "p0"
+owner = "rafex"
+labels = []
+dependencies = []
+expected_files = ["pilot/src/specnative_pilot/cli.py", "spec-native/specs/agente-specnative/SPEC.md"]
+close_criteria = "Si el usuario pulsa Ctrl+C en cualquier prompt de asn --auth, el CLI termina sin traceback, informa que la autenticación se canceló y no deja credenciales parciales."
+validation = ["Revisión del manejo de KeyboardInterrupt y del orden de escritura de credenciales", "make install BIN_DIR=/home/rafex/.local/bin"]
+completion_evidence = ["make install BIN_DIR=/home/rafex/.local/bin: instalación del paquete specnative-agent-pilot 0.2.0 desde este checkout y actualización de los ejecutables asn, asn-agent-mcp, asn-mcp y specnative-agent; revisión del flujo authenticate confirma que las escrituras SOPS ocurren después de completar los prompts."]
+```
+
+Manejar KeyboardInterrupt durante la autenticación interactiva para salir sin traceback ni presentar la interrupción del usuario como fallo; verificar que interrumpir la captura no escriba credenciales.
