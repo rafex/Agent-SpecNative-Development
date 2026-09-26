@@ -109,6 +109,7 @@ def test_manager_reports_preflight_without_building_model(tmp_path, monkeypatch)
 
     monkeypatch.setattr("specnative_pilot.session.SpecNativeMcp", InvalidMcp)
     monkeypatch.setattr("specnative_pilot.session.build_model", lambda _: pytest.fail("model built"))
+    monkeypatch.setattr("specnative_pilot.session.record_failure", lambda *args, **kwargs: None)
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     result = SessionManager(config(tmp_path)).start("demo")
     assert result["status"] == "preflight_failed"
@@ -116,8 +117,47 @@ def test_manager_reports_preflight_without_building_model(tmp_path, monkeypatch)
 
 def test_manager_reports_missing_credentials_with_auth_command(tmp_path, monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr("specnative_pilot.session.record_failure", lambda *args, **kwargs: None)
     monkeypatch.setattr("specnative_pilot.session.SpecNativeMcp", lambda *_: pytest.fail("MCP must not start"))
     result = SessionManager(config(tmp_path)).start("demo")
     assert result["status"] == "credentials_missing"
     assert "OPENAI_API_KEY" in result["text"]
     assert "asn --auth" in result["text"]
+
+
+def test_manager_logs_preflight_failure_without_returning_log_to_client(tmp_path, monkeypatch):
+    calls = []
+
+    class InvalidMcp(FakeMcp):
+        def __init__(self, *args, **kwargs):
+            super().__init__("Validation failed: missing context")
+
+    monkeypatch.setattr("specnative_pilot.session.SpecNativeMcp", InvalidMcp)
+    monkeypatch.setattr("specnative_pilot.session.build_model", lambda _: pytest.fail("model built"))
+    monkeypatch.setattr("specnative_pilot.session.record_failure", lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    result = SessionManager(config(tmp_path)).start("demo")
+
+    assert result["status"] == "preflight_failed"
+    assert len(calls) == 1
+    assert calls[0][0][0] == "agent_mcp_preflight"
+
+
+def test_manager_logs_preflight_failure_without_returning_log_to_client(tmp_path, monkeypatch):
+    calls = []
+
+    class InvalidMcp(FakeMcp):
+        def __init__(self, *args, **kwargs):
+            super().__init__("Validation failed: missing context")
+
+    monkeypatch.setattr("specnative_pilot.session.SpecNativeMcp", InvalidMcp)
+    monkeypatch.setattr("specnative_pilot.session.build_model", lambda _: pytest.fail("model built"))
+    monkeypatch.setattr("specnative_pilot.session.record_failure", lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+
+    result = SessionManager(config(tmp_path)).start("demo")
+
+    assert result["status"] == "preflight_failed"
+    assert len(calls) == 1
+    assert calls[0][0][0] == "agent_mcp_preflight"

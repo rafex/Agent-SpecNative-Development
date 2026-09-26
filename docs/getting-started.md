@@ -49,6 +49,11 @@ se conserva sólo en memoria. Si no quieres usar SOPS, puedes exportar
 `SPECNATIVE_AGENT_MODEL` y `OPENAI_API_KEY`; usa
 `SPECNATIVE_AGENT_API_BASE` para un endpoint alternativo.
 
+El esfuerzo de razonamiento se configura en `[agent].reasoning_effort` de
+`.specnative/agent.toml` o con `SPECNATIVE_AGENT_REASONING_EFFORT`; el valor de
+entorno tiene prioridad. ASN pasa el mismo valor al agente y a `asn --test`.
+Si no se especifica, el proveedor usa su valor predeterminado.
+
 Las credenciales del proyecto tienen prioridad sobre las globales y las
 variables de entorno. Para usar gopass, inicializa las referencias y sigue las
 instrucciones que imprime ASN:
@@ -59,6 +64,15 @@ asn secrets init --repo . --backend gopass
 
 Consulta [el manual de `asn`](man_asn.md) para backends, precedencia y opciones
 de configuración.
+
+Comprueba endpoint, modelo y credencial antes de iniciar el agente:
+
+```bash
+asn --test
+```
+
+Este comando envía una petición corta al proveedor con `curl` y no inicia el
+MCP ni la sesión interactiva. Puede consumir una pequeña cantidad de cuota.
 
 ## Iniciar el agente
 

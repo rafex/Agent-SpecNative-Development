@@ -6,6 +6,9 @@ api_key_env = "OPENAI_API_KEY"
 question_mode = "single"
 history = false
 max_steps = 12
+# Optional provider reasoning level (for example: low, medium, high).
+# SPECNATIVE_AGENT_REASONING_EFFORT overrides this value when set.
+reasoning_effort = ""
 
 [mcp]
 python = ".specnative/.venv/bin/python"

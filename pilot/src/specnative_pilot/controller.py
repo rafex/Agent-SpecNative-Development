@@ -9,6 +9,7 @@ from smolagents.utils import AgentGenerationError
 
 from .agent import SpecNativeAgent
 from .config import Config
+from .failure_log import record_failure
 from .history import HistoryStore
 from .intent import parse_template_command
 from .mcp import SpecNativeMcp
@@ -103,7 +104,15 @@ class Controller:
     def run_preflight(self, mcp: SpecNativeMcp) -> bool:
         validation = str(mcp.call("validate"))
         self.say(validation)
-        return validation.startswith("Validation passed")
+        passed = validation.startswith("Validation passed")
+        if not passed:
+            record_failure(
+                "preflight",
+                RuntimeError(validation),
+                model=self.config.model,
+                endpoint=self.config.api_base,
+            )
+        return passed
 
     def run(self, initiative: str | None = None, preflight: bool = False) -> int:
         with SpecNativeMcp(self.config.repo, self.config.mcp_python, self.config.mcp_script) as mcp:
@@ -125,7 +134,17 @@ class Controller:
                     continue
                 try:
                     result = session.message(message)
-                except AgentGenerationError:
+                except AgentGenerationError as error:
+                    model = getattr(getattr(session, "agent", None), "model", None)
+                    client_kwargs = getattr(model, "client_kwargs", {}) or {}
+                    record_failure(
+                        "agent_generation",
+                        error,
+                        model=getattr(model, "model_id", None) or self.config.model,
+                        endpoint=client_kwargs.get("base_url") or self.config.api_base,
+                        api_key=client_kwargs.get("api_key"),
+                        include_traceback=True,
+                    )
                     session.close()
                     self.say(
                         "Error del modelo: no pudo completar una llamada a herramienta. "

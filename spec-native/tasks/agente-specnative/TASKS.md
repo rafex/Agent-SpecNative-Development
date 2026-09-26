@@ -208,3 +208,57 @@ completion_evidence = ["`uv run --project pilot --extra dev --locked -- python -
 ```
 
 Ampliar /help para renderizar el manual Markdown empaquetado con mdcat y manejar AgentGenerationError de proveedores tool-calling con salida clara, cierre seguro y sin reintentos automáticos.
+
+### TASK-AGENTE-SPECNATIV-0011 - Agregar asn --test para validar endpoint, modelo y token
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0011"
+title = "Agregar asn --test para validar endpoint, modelo y token"
+state = "done"
+priority = "p2"
+owner = "rafex"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "`asn --test` reutiliza el mismo modelo, URL base y token que el agente; realiza una sola petición corta sin herramientas usando curl; informa éxito o error útil sin exponer credenciales; sale antes del preflight/MCP/agente; manual y guía de inicio documentan el modo."
+validation = ["Pruebas unitarias simuladas cubren curl exitoso, respuestas HTTP inválidas, fallo de curl y ausencia de credenciales sin hacer llamadas reales al proveedor.", "Pruebas CLI confirman que --test no inicia Controller y que propaga el resultado del diagnóstico.", "Ejecutar pytest dirigido del paquete pilot."]
+completion_evidence = ["`XDG_CONFIG_HOME=/tmp/asn-test-config uv run --project pilot pytest -q` terminó con 59 passed; `make docs` generó el sitio MkDocs correctamente; `git diff --check` pasó. Las pruebas usan curl simulado y no realizaron llamadas reales al proveedor."]
+```
+
+Añadir un modo de diagnóstico `asn --test` que resuelva la configuración y secretos actuales y envíe una petición Chat Completions mínima con curl, evitando arrancar MCP o agente interactivo; documentar uso y errores seguros.
+
+### TASK-AGENTE-SPECNATIV-0012 - Mostrar petición sanitizada en asn --test
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0012"
+title = "Mostrar petición sanitizada en asn --test"
+state = "done"
+priority = "p2"
+owner = "rafex"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "Antes o durante el reporte del resultado, asn --test muestra método, URL sanitizada, modelo, JSON del request y token enmascarado con prefijo/sufijo (tokens cortos completamente ocultos). Nunca revela userinfo ni valores de query URL; respuesta sin texto incluye status HTTP y metadatos disponibles sin volcar respuesta completa."
+validation = ["Pruebas unitarias de requests exitoso, HTTP error y HTTP 200 con contenido vacío comprueban que se imprime el resumen solicitado y no se filtran secretos.", "Pruebas de redacción verifican prefijo/sufijo y tokens cortos, además de credenciales embebidas y query params en URL.", "Correr suite pilot y build de MkDocs; no hacer request real a proveedor."]
+completion_evidence = ["`XDG_CONFIG_HOME=/tmp/asn-test-config uv run --project pilot pytest -q` terminó con 62 passed; `make docs` construyó el sitio correctamente. Las pruebas simulan curl y validan el resumen sanitizado en éxitos, HTTP 401 y HTTP 200 sin texto; no hubo llamadas reales al proveedor."]
+```
+
+Ampliar el diagnóstico de asn --test para mostrar URL endpoint, modelo, body de la petición y Authorization parcialmente enmascarado incluso en errores; reportar metadatos de HTTP 200 sin contenido, ocultando credenciales URL.
+
+### TASK-AGENTE-SPECNATIV-0013 - Aplicar esfuerzo de razonamiento y registrar fallas de ASN
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0013"
+title = "Aplicar esfuerzo de razonamiento y registrar fallas de ASN"
+state = "done"
+priority = "p2"
+owner = "rafex"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "[agent].reasoning_effort y SPECNATIVE_AGENT_REASONING_EFFORT configuran el mismo argumento del proveedor para agente y prueba, con env prevaleciendo y default del proveedor cuando falta; asn --test usa límite 1024. Fallas de CLI y asn-agent-mcp registran JSONL saneado con traceback para excepciones inesperadas, en /var/log/asn con fallback de usuario específico de plataforma y /tmp final, rotado a 10 MiB x 5 copias y permisos 0700/0600. No se registran prompts, respuestas, bodies ni credenciales, y el transporte MCP stdio no mezcla logs en stdout."
+validation = ["Pruebas cubren precedencia de razonamiento y propagación a constructor del modelo y request curl, default omitido y cap 1024.", "Pruebas simulan errores CLI/MCP, destinos no escribibles, redacción de secretos, permisos/rotación y preservación del stdout MCP.", "Ejecutar suite pilot y compilación MkDocs sin petición real al proveedor."]
+completion_evidence = ["`XDG_CONFIG_HOME=/tmp/asn-test-config XDG_STATE_HOME=/tmp/asn-test-state uv run --project pilot pytest -q` terminó con 75 passed; `make docs` compiló MkDocs correctamente y `git diff --check` pasó. Las llamadas curl se simularon; no se consultó al proveedor real."]
+```
+
+Configurar reasoning_effort compartido por el agente y asn --test, elevar el presupuesto del smoke test para modelos de razonamiento e implementar logs JSONL de fallas del CLI y agente MCP con rutas persistentes/fallback, rotación y redacción de secretos.

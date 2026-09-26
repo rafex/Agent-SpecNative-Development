@@ -92,6 +92,7 @@ def test_help_falls_back_to_markdown_when_mdcat_is_missing(tmp_path, monkeypatch
 def test_generation_error_exits_cleanly_without_writes(tmp_path, monkeypatch):
     output = StringIO()
     controller = Controller(config(tmp_path), input_fn=lambda _: "describir idea", output=output)
+    monkeypatch.setattr("specnative_pilot.controller.record_failure", lambda *args, **kwargs: None)
     mcp = FakeMcp("unused")
     monkeypatch.setattr("specnative_pilot.controller.SpecNativeMcp", lambda *_: mcp)
 

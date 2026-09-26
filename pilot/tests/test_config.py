@@ -55,3 +55,33 @@ def test_local_mcp_takes_precedence_over_legacy_config(tmp_path):
 
     assert config.mcp_python is None
     assert config.mcp_script is None
+
+
+def test_reasoning_effort_uses_toml_unless_environment_overrides(tmp_path, monkeypatch):
+    config_file = tmp_path / "agent.toml"
+    config_file.write_text('[agent]\nreasoning_effort = "medium"\n', encoding="utf-8")
+    monkeypatch.delenv("SPECNATIVE_AGENT_REASONING_EFFORT", raising=False)
+
+    assert load_config(tmp_path, config_file).reasoning_effort == "medium"
+
+    monkeypatch.setenv("SPECNATIVE_AGENT_REASONING_EFFORT", "low")
+    assert load_config(tmp_path, config_file).reasoning_effort == "low"
+
+
+def test_reasoning_effort_defaults_to_provider_when_unset(tmp_path, monkeypatch):
+    monkeypatch.delenv("SPECNATIVE_AGENT_REASONING_EFFORT", raising=False)
+
+    assert load_config(tmp_path).reasoning_effort is None
+
+
+def test_reasoning_effort_must_be_a_string_in_toml(tmp_path, monkeypatch):
+    config_file = tmp_path / "agent.toml"
+    config_file.write_text("[agent]\nreasoning_effort = 2\n", encoding="utf-8")
+    monkeypatch.delenv("SPECNATIVE_AGENT_REASONING_EFFORT", raising=False)
+
+    try:
+        load_config(tmp_path, config_file)
+    except ValueError as error:
+        assert "reasoning_effort" in str(error)
+    else:
+        raise AssertionError("non-string reasoning_effort should fail")

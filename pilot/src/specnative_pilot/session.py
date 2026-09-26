@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from .agent import SpecNativeAgent
 from .config import Config
+from .failure_log import record_failure
 from .history import HistoryStore
 from .intent import parse_template_command
 from .mcp import SpecNativeMcp
@@ -237,11 +238,19 @@ class SessionManager:
             credentials = resolve_credentials(config)
             missing = missing_credential_names(config, credentials)
             if missing:
+                record_failure(
+                    "agent_mcp_start",
+                    RuntimeError(credential_setup_message(missing, config.api_key_env)),
+                    model=credentials.model,
+                    endpoint=credentials.api_base,
+                    api_key=credentials.api_key,
+                )
                 return {
                     "status": "credentials_missing",
                     "text": credential_setup_message(missing, config.api_key_env),
                 }
         except SecretResolutionError as error:
+            record_failure("agent_mcp_credentials", error, model=config.model, endpoint=config.api_base)
             return {
                 "status": "credentials_error",
                 "text": f"No se pudieron resolver las credenciales ASN: {error}. Revisa el backend o ejecuta `asn --auth`.",
@@ -249,10 +258,19 @@ class SessionManager:
         try:
             session = AgentSession.create(config, initiative)
         except InitiativeRequired as error:
+            record_failure("agent_mcp_start", error, model=config.model, endpoint=config.api_base)
             return {"status": "initiative_required", "initiatives": error.specs, "text": str(error)}
         except PreflightError as error:
+            record_failure("agent_mcp_preflight", error, model=config.model, endpoint=config.api_base)
             return {"status": "preflight_failed", "text": str(error)}
         except Exception as error:
+            record_failure(
+                "agent_mcp_start",
+                error,
+                model=config.model,
+                endpoint=config.api_base,
+                include_traceback=True,
+            )
             return {"status": "error", "text": str(error)}
         self.sessions[session.session_id] = session
         return session._result("ready", "Sesión ASN iniciada.")

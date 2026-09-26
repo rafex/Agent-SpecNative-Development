@@ -21,6 +21,7 @@ Configura un modelo compatible con la API de OpenAI (la forma tradicional):
 ```bash
 export SPECNATIVE_AGENT_MODEL='nombre-del-modelo'
 export OPENAI_API_KEY='...'
+export SPECNATIVE_AGENT_REASONING_EFFORT='low'  # opcional, si el proveedor lo admite
 ```
 
 Si faltan estas credenciales, `asn` informa qué valores necesita y sugiere el
@@ -30,6 +31,18 @@ al proyecto actual. El asistente solicita el modelo, una API base opcional y
 una API key oculta; guarda los valores cifrados con SOPS y age. Si hace falta,
 crea la identidad age en `~/.age/asn-key.txt`. Si faltan `sops` o `age`, muestra
 instrucciones de instalación y termina sin instalar paquetes.
+
+Ejecuta `asn --test` para validar el endpoint, el modelo y el token con una
+petición mínima por `curl`, sin iniciar el MCP o el agente interactivo. La
+prueba muestra un resumen sanitizado del endpoint y request; el token aparece
+parcialmente enmascarado (o totalmente oculto si es corto). La solicitud puede
+consumir cuota.
+
+Las fallas del CLI y de `asn-agent-mcp` se registran en `asn-failures.jsonl` con
+rotación. ASN prueba `/var/log/asn`, luego la carpeta de logs del usuario
+(`~/Library/Logs/asn` en macOS o `$XDG_STATE_HOME/asn/logs`) y finalmente
+`/tmp/asn`. El formato incluye contexto del error, sin prompts, respuestas,
+cuerpos de petición ni credenciales.
 
 En clientes MCP como OpenCode, configura las credenciales antes de iniciar el
 cliente o usa el archivo cifrado del proyecto. El inicio de sesión MCP no es

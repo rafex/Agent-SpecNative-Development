@@ -20,8 +20,10 @@ def build_model(config: Config) -> OpenAIServerModel:
             f"No existe una API key en el backend configurado ni en la variable {config.api_key_env}; "
             "configúrala en el entorno o ejecuta `asn --auth`."
         )
+    model_options = {"reasoning_effort": config.reasoning_effort} if config.reasoning_effort else {}
     return OpenAIServerModel(
         model_id=credentials.model,
         api_base=credentials.api_base,
         api_key=credentials.api_key,
+        **model_options,
     )

@@ -20,6 +20,7 @@ class Config:
     max_steps: int
     mcp_python: Path | None
     mcp_script: Path | None
+    reasoning_effort: str | None = None
     secrets_backend: str = "auto"
     secrets_file: Path | None = None
     gopass_file: Path | None = None
@@ -73,10 +74,16 @@ def load_config(
         gopass_file if gopass_file is not None else secrets.get("gopass_file"),
         DEFAULT_GOPASS_FILE,
     )
+    reasoning_effort = os.getenv("SPECNATIVE_AGENT_REASONING_EFFORT") or agent.get("reasoning_effort") or None
+    if reasoning_effort is not None:
+        if not isinstance(reasoning_effort, str):
+            raise ValueError("[agent].reasoning_effort debe ser texto")
+        reasoning_effort = reasoning_effort.strip() or None
     return Config(
         repo=repo,
         model=os.getenv("SPECNATIVE_AGENT_MODEL", agent.get("model", "")),
         api_base=os.getenv("SPECNATIVE_AGENT_API_BASE", agent.get("api_base")) or None,
+        reasoning_effort=reasoning_effort,
         api_key_env=agent.get("api_key_env", "OPENAI_API_KEY"),
         question_mode=question_mode or os.getenv("SPECNATIVE_AGENT_QUESTION_MODE", agent.get("question_mode", "single")),
         history=os.getenv("SPECNATIVE_AGENT_HISTORY", str(agent.get("history", False))).lower() in {"1", "true", "yes", "on"},

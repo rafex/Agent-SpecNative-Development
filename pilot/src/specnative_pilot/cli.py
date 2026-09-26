@@ -5,7 +5,9 @@ from pathlib import Path
 
 from .config import load_config
 from .controller import Controller
+from .failure_log import record_failure
 from .mcp_discovery import resolve_project_repo
+from .provider_check import ProviderTestError, check_provider
 from .secret_setup import SecretSetupError, authenticate, initialize_secrets
 from .secrets import SecretResolutionError, credential_setup_message, missing_credential_names, resolve_credentials
 
@@ -16,6 +18,7 @@ def main(preflight_default: bool = False) -> int:
     parser.add_argument("subcommand", nargs="?", choices=["init"], help="Subcomando administrativo")
     parser.add_argument("--repo", type=Path, help="Repositorio destino (por defecto, cwd o su proyecto SpecNative)")
     parser.add_argument("--auth", action="store_true", help="Configura credenciales ASN cifradas con SOPS/age")
+    parser.add_argument("--test", action="store_true", help="Valida URL, modelo y token con una petición corta vía curl")
     parser.add_argument("--clients", choices=["all", "codex", "claude", "opencode"], default="all")
     parser.add_argument("--backend", choices=["sops", "gopass"], help="Backend para `asn secrets init`")
     parser.add_argument("--prefix", help="Prefijo de referencias para gopass")
@@ -34,6 +37,8 @@ def main(preflight_default: bool = False) -> int:
         help="Valida el contexto antes de iniciar el modelo",
     )
     args = parser.parse_args()
+    if args.test and (args.command is not None or args.subcommand is not None or args.auth):
+        parser.error("`--test` no se combina con comandos administrativos ni `--auth`")
     if args.auth:
         if args.command is not None or args.subcommand is not None:
             parser.error("`--auth` no se combina con otro comando")
@@ -118,18 +123,48 @@ def main(preflight_default: bool = False) -> int:
         credentials = resolve_credentials(config)
         missing = missing_credential_names(config, credentials)
         if missing:
-            print(credential_setup_message(missing, config.api_key_env))
+            message = credential_setup_message(missing, config.api_key_env)
+            record_failure("credentials", RuntimeError(message), model=config.model, endpoint=config.api_base)
+            print(message)
             return 2
     except SecretResolutionError as error:
+        record_failure("credentials", error, model=config.model, endpoint=config.api_base)
         print(f"No se pudieron resolver las credenciales ASN: {error}")
         print("Revisa el backend configurado o ejecuta `asn --auth` para configurarlo.")
         return 2
+    if args.test:
+        try:
+            result = check_provider(
+                credentials,
+                reasoning_effort=config.reasoning_effort,
+                on_request=lambda summary: print(summary),
+            )
+        except ProviderTestError as error:
+            record_failure(
+                "provider_test",
+                error,
+                model=credentials.model,
+                endpoint=credentials.api_base,
+                api_key=credentials.api_key,
+            )
+            print(f"Falló la validación del proveedor: {error}")
+            return 2
+        print(f"Proveedor validado: modelo `{result.model}`, HTTP {result.status_code}, respuesta: {result.response}")
+        return 0
     try:
         return Controller(config).run(args.initiative, preflight=args.preflight)
     except KeyboardInterrupt:
         print("\nSesión cancelada.")
         return 130
     except (OSError, RuntimeError, ValueError) as error:
+        record_failure(
+            "asn_cli",
+            error,
+            model=credentials.model,
+            endpoint=credentials.api_base,
+            api_key=credentials.api_key,
+            include_traceback=True,
+        )
         print(f"Error del piloto: {error}")
         return 2
 

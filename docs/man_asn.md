@@ -16,11 +16,19 @@ destino. No requiere `Justfile` ni archivos de integración en el proyecto.
 ```bash
 export SPECNATIVE_AGENT_MODEL="nombre-del-modelo"
 export OPENAI_API_KEY="..."
+# Opcional; usa los valores admitidos por el proveedor, por ejemplo low
+export SPECNATIVE_AGENT_REASONING_EFFORT="low"
 ```
 
 Al iniciar, `asn` comprueba que el modelo y la API key estén disponibles. Si
 faltan, indica las variables que se pueden exportar en el entorno de usuario o
 sistema y recomienda `asn --auth`.
+
+El esfuerzo de razonamiento puede configurarse en `[agent].reasoning_effort` de
+`.specnative/agent.toml` o con `SPECNATIVE_AGENT_REASONING_EFFORT`; la variable
+de entorno tiene prioridad. ASN pasa el valor configurado tanto al agente como
+a `asn --test`. Si no se define, se conserva el valor predeterminado del
+proveedor.
 
 ```bash
 asn --auth                  # credenciales globales del usuario
@@ -67,6 +75,49 @@ asn --repo . --secrets-backend none
 
 El repositorio debe tener contexto SpecNative válido. `asn` ejecuta el
 preflight antes de iniciar el modelo y termina sin escribir si falla.
+
+Antes de iniciar una sesión puedes comprobar la URL, el modelo y el token con:
+
+```bash
+asn --test
+asn --test --repo /ruta/al/proyecto
+```
+
+ASN resuelve las mismas credenciales que usa el agente y hace una única
+petición corta de Chat Completions por `curl`, sin iniciar el MCP ni el agente.
+Si no configuras una API base, usa `https://api.openai.com/v1`; si la configuras,
+añade `/chat/completions` (o conserva esa ruta si ya está completa). La petición
+puede consumir una pequeña cantidad de cuota del proveedor. Usa el esfuerzo de
+razonamiento configurado para el agente y un límite de 1024 tokens de respuesta,
+para que modelos que razonan no agoten prematuramente el presupuesto. El token
+completo se envía por entrada estándar a `curl` y no se imprime.
+
+Antes de enviar la solicitud, `asn --test` muestra el método, el endpoint, el
+modelo, el encabezado de autorización enmascarado y el cuerpo JSON. En el token
+se ven sólo cuatro caracteres iniciales y finales; los tokens cortos se ocultan
+por completo. El resumen también oculta credenciales embebidas, fragmentos y
+valores de parámetros de la URL. Si el servidor responde HTTP 200 sin texto, el
+error incluye el estado y metadatos disponibles, como `finish_reason`, para
+facilitar el diagnóstico sin volcar la respuesta completa.
+
+Un HTTP `401` suele indicar token incorrecto; `404` puede señalar una URL base o
+un modelo que el proveedor no reconoce. Un error de conexión apunta a la URL,
+DNS, TLS o red. Una validación correcta confirma que endpoint, modelo y token
+aceptan una solicitud básica; no garantiza que el modelo admita tool calling.
+
+## Logs de fallas
+
+ASN escribe fallas del CLI y de `asn-agent-mcp` como JSON Lines en
+`asn-failures.jsonl`. Intenta primero `/var/log/asn`; en macOS continúa con
+`~/Library/Logs/asn`, y en otros sistemas con
+`${XDG_STATE_HOME:-~/.local/state}/asn/logs`. Si esas ubicaciones no permiten
+escritura, usa `/tmp/asn`. Los archivos se rotan a 10 MiB con hasta cinco copias;
+el directorio y los logs se limitan a permisos `0700` y `0600`.
+
+Los eventos incluyen hora, operación, modelo, endpoint sanitizado y error; los
+errores inesperados añaden traceback. No se guardan prompts, respuestas, cuerpos
+de petición ni tokens. En MCP por stdio, los registros van a archivo; nunca a
+stdout.
 
 ## Uso
 

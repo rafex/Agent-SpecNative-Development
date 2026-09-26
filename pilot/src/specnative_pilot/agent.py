@@ -49,6 +49,7 @@ Reglas obligatorias:
 class SpecNativeAgent:
     def __init__(self, model, mcp, initiative: str, question_mode: str, max_steps: int = 12) -> None:
         self.proposals: list[Proposal] = []
+        self.model = model
         proposal_tool = ProposalTool(initiative, self.proposals)
         self.agent = ToolCallingAgent(
             tools=[*mcp.read_tools, proposal_tool],

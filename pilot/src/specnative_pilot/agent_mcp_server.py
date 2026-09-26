@@ -8,7 +8,30 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from .config import load_config
+from .failure_log import record_failure
 from .session import SessionError, SessionManager
+
+
+def _record_tool_failure(
+    operation: str,
+    error: BaseException,
+    manager: SessionManager,
+    *,
+    session_id: str | None = None,
+    traceback_required: bool = False,
+) -> None:
+    config = manager.config
+    session = getattr(manager, "sessions", {}).get(session_id) if session_id else None
+    model_object = getattr(getattr(session, "agent", None), "model", None)
+    client_kwargs = getattr(model_object, "client_kwargs", {}) or {}
+    record_failure(
+        operation,
+        error,
+        model=getattr(model_object, "model_id", None) or config.model,
+        endpoint=client_kwargs.get("base_url") or config.api_base,
+        api_key=client_kwargs.get("api_key"),
+        include_traceback=traceback_required,
+    )
 
 
 def create_server(config: Any) -> FastMCP:
@@ -33,7 +56,11 @@ def create_server(config: Any) -> FastMCP:
         try:
             return manager.get(session_id).message(message)
         except SessionError as error:
+            _record_tool_failure("agent_mcp_message", error, manager, session_id=session_id)
             return {"status": "error", "session_id": session_id, "text": str(error)}
+        except Exception as error:
+            _record_tool_failure("agent_mcp_message", error, manager, session_id=session_id, traceback_required=True)
+            raise
 
     @server.tool()
     def agent_session_status(session_id: str) -> dict[str, Any]:
@@ -41,7 +68,11 @@ def create_server(config: Any) -> FastMCP:
         try:
             return manager.get(session_id).status()
         except SessionError as error:
+            _record_tool_failure("agent_mcp_status", error, manager, session_id=session_id)
             return {"status": "error", "session_id": session_id, "text": str(error)}
+        except Exception as error:
+            _record_tool_failure("agent_mcp_status", error, manager, session_id=session_id, traceback_required=True)
+            raise
 
     @server.tool()
     def agent_session_approve(session_id: str, approval_token: str) -> dict[str, Any]:
@@ -49,7 +80,17 @@ def create_server(config: Any) -> FastMCP:
         try:
             return manager.get(session_id).approve(approval_token)
         except (SessionError, OSError, ValueError, RuntimeError) as error:
+            _record_tool_failure(
+                "agent_mcp_approve",
+                error,
+                manager,
+                session_id=session_id,
+                traceback_required=not isinstance(error, SessionError),
+            )
             return {"status": "error", "session_id": session_id, "text": str(error)}
+        except Exception as error:
+            _record_tool_failure("agent_mcp_approve", error, manager, session_id=session_id, traceback_required=True)
+            raise
 
     @server.tool()
     def agent_session_reject(session_id: str, approval_token: str) -> dict[str, Any]:
@@ -57,7 +98,11 @@ def create_server(config: Any) -> FastMCP:
         try:
             return manager.get(session_id).reject(approval_token)
         except SessionError as error:
+            _record_tool_failure("agent_mcp_reject", error, manager, session_id=session_id)
             return {"status": "error", "session_id": session_id, "text": str(error)}
+        except Exception as error:
+            _record_tool_failure("agent_mcp_reject", error, manager, session_id=session_id, traceback_required=True)
+            raise
 
     @server.tool()
     def agent_session_close(session_id: str) -> dict[str, Any]:
@@ -65,7 +110,11 @@ def create_server(config: Any) -> FastMCP:
         try:
             return manager.close(session_id)
         except SessionError as error:
+            _record_tool_failure("agent_mcp_close", error, manager, session_id=session_id)
             return {"status": "error", "session_id": session_id, "text": str(error)}
+        except Exception as error:
+            _record_tool_failure("agent_mcp_close", error, manager, session_id=session_id, traceback_required=True)
+            raise
 
     return server
 
@@ -85,20 +134,31 @@ def main() -> None:
     if (args.mcp_python is None) != (args.mcp_script is None):
         parser.error("--mcp-python y --mcp-script deben proporcionarse juntas")
     repo = args.repo.resolve()
-    config = load_config(
-        repo,
-        args.config,
-        mcp_python=args.mcp_python,
-        mcp_script=args.mcp_script,
-        secrets_backend=args.secrets_backend,
-        secrets_file=args.secrets_file,
-        gopass_file=args.gopass_file,
-    )
-    server = create_server(config)
-    if args.transport == "sse":
-        server.run(transport="sse", port=args.port)
-    else:
-        server.run(transport="stdio")
+    config = None
+    try:
+        config = load_config(
+            repo,
+            args.config,
+            mcp_python=args.mcp_python,
+            mcp_script=args.mcp_script,
+            secrets_backend=args.secrets_backend,
+            secrets_file=args.secrets_file,
+            gopass_file=args.gopass_file,
+        )
+        server = create_server(config)
+        if args.transport == "sse":
+            server.run(transport="sse", port=args.port)
+        else:
+            server.run(transport="stdio")
+    except Exception as error:
+        record_failure(
+            "agent_mcp_server",
+            error,
+            model=config.model if config else os.getenv("SPECNATIVE_AGENT_MODEL"),
+            endpoint=config.api_base if config else os.getenv("SPECNATIVE_AGENT_API_BASE"),
+            include_traceback=True,
+        )
+        raise
 
 
 if __name__ == "__main__":
