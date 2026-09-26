@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from specnative_pilot.config import load_config
+from specnative_pilot.config import effective_reasoning_effort, load_config
 
 
 def test_external_mcp_paths_override_local_config(tmp_path):
@@ -72,6 +72,40 @@ def test_reasoning_effort_defaults_to_provider_when_unset(tmp_path, monkeypatch)
     monkeypatch.delenv("SPECNATIVE_AGENT_REASONING_EFFORT", raising=False)
 
     assert load_config(tmp_path).reasoning_effort is None
+
+
+def test_effective_reasoning_effort_defaults_low_only_for_groq_gpt_oss(tmp_path, monkeypatch):
+    monkeypatch.delenv("SPECNATIVE_AGENT_REASONING_EFFORT", raising=False)
+    config = load_config(tmp_path)
+
+    assert effective_reasoning_effort(
+        config,
+        model="openai/gpt-oss-120b",
+        api_base="https://api.groq.com/openai/v1",
+    ) == "low"
+    assert effective_reasoning_effort(
+        config,
+        model="openai/gpt-oss-120b",
+        api_base="https://api.openai.com/v1",
+    ) is None
+    assert effective_reasoning_effort(
+        config,
+        model="other-model",
+        api_base="https://api.groq.com/openai/v1",
+    ) is None
+
+
+def test_effective_reasoning_effort_override_applies_to_groq_gpt_oss(tmp_path, monkeypatch):
+    config_file = tmp_path / "agent.toml"
+    config_file.write_text('[agent]\nreasoning_effort = "high"\n', encoding="utf-8")
+    monkeypatch.delenv("SPECNATIVE_AGENT_REASONING_EFFORT", raising=False)
+    config = load_config(tmp_path, config_file)
+
+    assert effective_reasoning_effort(
+        config,
+        model="openai/gpt-oss-120b",
+        api_base="https://api.groq.com/openai/v1",
+    ) == "high"
 
 
 def test_reasoning_effort_must_be_a_string_in_toml(tmp_path, monkeypatch):

@@ -52,7 +52,8 @@ se conserva sólo en memoria. Si no quieres usar SOPS, puedes exportar
 El esfuerzo de razonamiento se configura en `[agent].reasoning_effort` de
 `.specnative/agent.toml` o con `SPECNATIVE_AGENT_REASONING_EFFORT`; el valor de
 entorno tiene prioridad. ASN pasa el mismo valor al agente y a `asn --test`.
-Si no se especifica, el proveedor usa su valor predeterminado.
+Para Groq GPT-OSS, ASN usa `low` si no hay override; otros proveedores conservan
+su valor predeterminado.
 
 Las credenciales del proyecto tienen prioridad sobre las globales y las
 variables de entorno. Para usar gopass, inicializa las referencias y sigue las
@@ -72,7 +73,9 @@ asn --test
 ```
 
 Este comando envía una petición corta al proveedor con `curl` y no inicia el
-MCP ni la sesión interactiva. Puede consumir una pequeña cantidad de cuota.
+MCP ni la sesión interactiva. Comprueba que el proveedor devuelve una llamada a
+herramienta requerida, además de validar endpoint, modelo y credenciales. Puede
+consumir una pequeña cantidad de cuota.
 
 ## Iniciar el agente
 

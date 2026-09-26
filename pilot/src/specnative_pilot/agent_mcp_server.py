@@ -9,6 +9,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .config import load_config
 from .failure_log import record_failure
+from .model import tool_call_attempts
 from .session import SessionError, SessionManager
 
 
@@ -24,12 +25,15 @@ def _record_tool_failure(
     session = getattr(manager, "sessions", {}).get(session_id) if session_id else None
     model_object = getattr(getattr(session, "agent", None), "model", None)
     client_kwargs = getattr(model_object, "client_kwargs", {}) or {}
+    model_kwargs = getattr(model_object, "kwargs", {}) or {}
     record_failure(
         operation,
         error,
         model=getattr(model_object, "model_id", None) or config.model,
         endpoint=client_kwargs.get("base_url") or config.api_base,
         api_key=client_kwargs.get("api_key"),
+        reasoning_effort=model_kwargs.get("reasoning_effort"),
+        attempts=tool_call_attempts(error),
         include_traceback=traceback_required,
     )
 

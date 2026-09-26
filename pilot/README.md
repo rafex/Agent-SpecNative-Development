@@ -32,11 +32,12 @@ una API key oculta; guarda los valores cifrados con SOPS y age. Si hace falta,
 crea la identidad age en `~/.age/asn-key.txt`. Si faltan `sops` o `age`, muestra
 instrucciones de instalación y termina sin instalar paquetes.
 
-Ejecuta `asn --test` para validar el endpoint, el modelo y el token con una
-petición mínima por `curl`, sin iniciar el MCP o el agente interactivo. La
-prueba muestra un resumen sanitizado del endpoint y request; el token aparece
-parcialmente enmascarado (o totalmente oculto si es corto). La solicitud puede
-consumir cuota.
+Ejecuta `asn --test` para validar el endpoint, el modelo, el token y la llamada
+a herramienta requerida con una petición por `curl`, sin iniciar el MCP o el
+agente interactivo. Para Groq GPT-OSS, `low` es el esfuerzo predeterminado si no
+hay un override de configuración. La prueba muestra un resumen sanitizado del
+endpoint y request; el token aparece parcialmente enmascarado (o totalmente
+oculto si es corto). La solicitud puede consumir cuota.
 
 Las fallas del CLI y de `asn-agent-mcp` se registran en `asn-failures.jsonl` con
 rotación. ASN prueba `/var/log/asn`, luego la carpeta de logs del usuario

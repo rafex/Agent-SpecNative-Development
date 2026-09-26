@@ -27,8 +27,8 @@ sistema y recomienda `asn --auth`.
 El esfuerzo de razonamiento puede configurarse en `[agent].reasoning_effort` de
 `.specnative/agent.toml` o con `SPECNATIVE_AGENT_REASONING_EFFORT`; la variable
 de entorno tiene prioridad. ASN pasa el valor configurado tanto al agente como
-a `asn --test`. Si no se define, se conserva el valor predeterminado del
-proveedor.
+a `asn --test`. Para Groq GPT-OSS, si no se define ASN usa `low`; los demás
+modelos conservan el valor predeterminado del proveedor.
 
 ```bash
 asn --auth                  # credenciales globales del usuario
@@ -89,21 +89,23 @@ Si no configuras una API base, usa `https://api.openai.com/v1`; si la configuras
 añade `/chat/completions` (o conserva esa ruta si ya está completa). La petición
 puede consumir una pequeña cantidad de cuota del proveedor. Usa el esfuerzo de
 razonamiento configurado para el agente y un límite de 1024 tokens de respuesta,
-para que modelos que razonan no agoten prematuramente el presupuesto. El token
+para que modelos que razonan no agoten prematuramente el presupuesto. La prueba
+incluye una herramienta requerida y valida que el proveedor devuelva la llamada
+esperada; así detecta fallas de tool calling antes de abrir una sesión. El token
 completo se envía por entrada estándar a `curl` y no se imprime.
 
 Antes de enviar la solicitud, `asn --test` muestra el método, el endpoint, el
 modelo, el encabezado de autorización enmascarado y el cuerpo JSON. En el token
 se ven sólo cuatro caracteres iniciales y finales; los tokens cortos se ocultan
 por completo. El resumen también oculta credenciales embebidas, fragmentos y
-valores de parámetros de la URL. Si el servidor responde HTTP 200 sin texto, el
-error incluye el estado y metadatos disponibles, como `finish_reason`, para
-facilitar el diagnóstico sin volcar la respuesta completa.
+valores de parámetros de la URL. Si responde HTTP 200 sin la herramienta
+esperada, el error incluye el estado y metadatos disponibles, como
+`finish_reason`, sin volcar la respuesta completa.
 
 Un HTTP `401` suele indicar token incorrecto; `404` puede señalar una URL base o
 un modelo que el proveedor no reconoce. Un error de conexión apunta a la URL,
 DNS, TLS o red. Una validación correcta confirma que endpoint, modelo y token
-aceptan una solicitud básica; no garantiza que el modelo admita tool calling.
+aceptan una llamada a herramienta requerida.
 
 ## Logs de fallas
 

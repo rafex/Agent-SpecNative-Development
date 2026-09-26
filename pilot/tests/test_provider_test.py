@@ -11,6 +11,30 @@ def _credentials(api_base="https://api.example.test/openai/v1/"):
     return ResolvedCredentials(model="example-model", api_base=api_base, api_key="secret-token")
 
 
+def _tool_response(name="asn_tool_call_probe", value="ASN tool calling funciona"):
+    return json.dumps(
+        {
+            "choices": [
+                {
+                    "finish_reason": "tool_calls",
+                    "message": {
+                        "tool_calls": [
+                            {
+                                "id": "call-1",
+                                "type": "function",
+                                "function": {
+                                    "name": name,
+                                    "arguments": json.dumps({"ok": value}),
+                                },
+                            }
+                        ]
+                    },
+                }
+            ]
+        }
+    )
+
+
 def test_provider_uses_configured_url_and_hides_token_from_argv(monkeypatch):
     captured = {}
     summaries = []
@@ -23,7 +47,7 @@ def test_provider_uses_configured_url_and_hides_token_from_argv(monkeypatch):
         return subprocess.CompletedProcess(
             args,
             0,
-            stdout='{"choices":[{"message":{"content":"OK"}}]}\n200',
+            stdout=_tool_response() + "\n200",
             stderr="",
         )
 
@@ -32,16 +56,18 @@ def test_provider_uses_configured_url_and_hides_token_from_argv(monkeypatch):
 
     result = provider_check.check_provider(_credentials(), on_request=summaries.append)
 
-    assert result.response == "OK"
+    assert result.response == "tool call `asn_tool_call_probe` validada"
     assert result.model == "example-model"
     assert "https://api.example.test/openai/v1/chat/completions" in captured["config"]
-    assert captured["request"]["messages"] == [{"role": "user", "content": "Responde únicamente con OK."}]
+    assert captured["request"]["messages"][0]["content"].startswith("Llama a asn_tool_call_probe")
+    assert captured["request"]["tool_choice"] == "required"
+    assert captured["request"]["tools"][0]["function"]["name"] == "asn_tool_call_probe"
     assert "secret-token" not in " ".join(captured["args"])
     assert "Bearer secret-token" in captured["config"]
     assert "POST https://api.example.test/openai/v1/chat/completions" in summaries[0]
     assert "Modelo: example-model" in summaries[0]
     assert "Authorization: Bearer secr…oken" in summaries[0]
-    assert '"content": "Responde únicamente con OK."' in summaries[0]
+    assert '"tool_choice": "required"' in summaries[0]
     assert "secret-token" not in summaries[0]
 
 
@@ -65,7 +91,7 @@ def test_provider_reports_http_error_without_echoing_token(monkeypatch):
     assert summaries and "Petición de diagnóstico" in summaries[0]
 
 
-def test_provider_reports_http_200_empty_text_with_metadata(monkeypatch):
+def test_provider_reports_http_200_without_tool_call_with_metadata(monkeypatch):
     summaries = []
     monkeypatch.setattr(provider_check.shutil, "which", lambda name: "/usr/bin/curl")
     monkeypatch.setattr(
@@ -74,12 +100,12 @@ def test_provider_reports_http_200_empty_text_with_metadata(monkeypatch):
         lambda args, **kwargs: subprocess.CompletedProcess(
             args,
             0,
-            stdout='{"choices":[{"finish_reason":"length","message":{"content":null,"reasoning":"hidden"}}]}\n200',
+            stdout='{"choices":[{"finish_reason":"length","message":{"content":"text only","reasoning":"hidden"}}]}\n200',
             stderr="",
         ),
     )
 
-    with pytest.raises(provider_check.ProviderTestError, match="HTTP 200.*finish_reason=length") as error:
+    with pytest.raises(provider_check.ProviderTestError, match="HTTP 200.*no emitió.*finish_reason=length") as error:
         provider_check.check_provider(_credentials(), on_request=summaries.append)
     assert summaries and "POST https://api.example.test/openai/v1/chat/completions" in summaries[0]
     assert "reasoning" in str(error.value)
@@ -118,6 +144,8 @@ def test_provider_request_uses_reasoning_effort_and_safe_completion_budget():
 
     assert body["reasoning_effort"] == "low"
     assert body["max_completion_tokens"] == 1024
+    assert body["tool_choice"] == "required"
+    assert body["tools"][0]["function"]["name"] == "asn_tool_call_probe"
 
 
 def test_provider_request_omits_reasoning_effort_when_unset():
@@ -125,7 +153,24 @@ def test_provider_request_omits_reasoning_effort_when_unset():
     body = json.loads(request.body)
 
     assert body["max_completion_tokens"] == 1024
+    assert body["tool_choice"] == "required"
     assert "reasoning_effort" not in body
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [("other_tool", "ASN tool calling funciona"), ("asn_tool_call_probe", "wrong value")],
+)
+def test_provider_rejects_unexpected_tool_call(monkeypatch, name, value):
+    monkeypatch.setattr(provider_check.shutil, "which", lambda name: "/usr/bin/curl")
+    monkeypatch.setattr(
+        provider_check.subprocess,
+        "run",
+        lambda args, **kwargs: subprocess.CompletedProcess(args, 0, stdout=_tool_response(name, value) + "\n200", stderr=""),
+    )
+
+    with pytest.raises(provider_check.ProviderTestError, match="no coincide con la herramienta esperada"):
+        provider_check.check_provider(_credentials())
 
 
 def test_provider_reports_missing_curl(monkeypatch):

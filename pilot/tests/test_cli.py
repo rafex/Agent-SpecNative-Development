@@ -47,7 +47,8 @@ def test_cli_auth_repo_option_selects_project_scope(tmp_path, monkeypatch):
 def test_cli_test_checks_provider_without_starting_controller(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr("sys.argv", ["asn", "--test", "--repo", str(tmp_path)])
     monkeypatch.setattr(cli, "resolve_project_repo", lambda path: tmp_path)
-    monkeypatch.setattr(cli, "resolve_credentials", lambda config: object())
+    credentials = ResolvedCredentials("openai/gpt-oss-120b", "https://api.groq.com/openai/v1", "key")
+    monkeypatch.setattr(cli, "resolve_credentials", lambda config: credentials)
     monkeypatch.setattr(cli, "missing_credential_names", lambda config, credentials: [])
     monkeypatch.setenv("SPECNATIVE_AGENT_REASONING_EFFORT", "low")
     called = {}

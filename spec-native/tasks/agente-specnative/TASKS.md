@@ -262,3 +262,25 @@ completion_evidence = ["`XDG_CONFIG_HOME=/tmp/asn-test-config XDG_STATE_HOME=/tm
 ```
 
 Configurar reasoning_effort compartido por el agente y asn --test, elevar el presupuesto del smoke test para modelos de razonamiento e implementar logs JSONL de fallas del CLI y agente MCP con rutas persistentes/fallback, rotación y redacción de secretos.
+
+### TASK-AGENTE-SPECNATIV-0014 - Recuperar y diagnosticar fallos de tool calling en Groq GPT-OSS
+
+> **Update 2026-09-26T17:25:30Z:** Cambios implementados globalmente en ASN; el probe HTTP ahora exige un tool call real y el retry queda restringido al 400 exacto de Groq GPT-OSS.
+
+> **Update 2026-09-26T17:16:19Z:** Implementando defaults Groq GPT-OSS, retry acotado y validación de tool calling en asn --test.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0014"
+title = "Recuperar y diagnosticar fallos de tool calling en Groq GPT-OSS"
+state = "done"
+priority = "p1"
+owner = "rafex"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "Groq GPT-OSS sin override usa reasoning_effort low; solo el 400 por no emitir herramienta se reintenta una vez con instrucción explícita; el segundo fallo no modifica artefactos y se registra sanitizado. asn --test confirma llamada a herramienta y reporta errores útiles."
+validation = ["Pruebas simuladas cubren effort default/overrides, reintento único exacto, éxito de segundo intento, segundo fallo y ausencia de reintentos para errores distintos.", "Pruebas simuladas de asn --test validan tool_calls esperadas, HTTP error, respuesta sin tool call, sanitización y uso del effort efectivo.", "Ejecutar pytest del paquete pilot, make docs y git diff --check; probar asn --test contra el endpoint configurado."]
+completion_evidence = ["`XDG_CONFIG_HOME=/tmp/asn-test-config XDG_STATE_HOME=/tmp/asn-test-state uv run --project pilot pytest -q`: 84 passed; `make docs`: compilación correcta; `git diff --check`: correcto; MCP `validate()`: las 15 referencias obligatorias válidas; `health_check()`: 8/8 documentos saludables. Tras `make install`, `/home/rafex/.local/bin/asn --test --repo /home/rafex/repository/rafex/portal-captive` respondió HTTP 200 y validó `asn_tool_call_probe` con `tool_choice=required` y `reasoning_effort=low`."]
+```
+
+Definir effort low por defecto para Groq GPT-OSS, reintentar una sola vez el error HTTP 400 exacto de tool choice requerido, y hacer que asn --test compruebe una llamada real a una herramienta.

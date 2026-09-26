@@ -4,6 +4,7 @@ import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .mcp_discovery import find_local_mcp
 from .secrets import DEFAULT_GOPASS_FILE, DEFAULT_SOPS_FILE, SECRET_BACKENDS
@@ -24,6 +25,26 @@ class Config:
     secrets_backend: str = "auto"
     secrets_file: Path | None = None
     gopass_file: Path | None = None
+
+
+def effective_reasoning_effort(
+    config: Config,
+    *,
+    model: str | None = None,
+    api_base: str | None = None,
+) -> str | None:
+    """Resolve the configured effort, with a focused default for Groq GPT-OSS."""
+    if config.reasoning_effort:
+        return config.reasoning_effort
+    model_id = (model or config.model).strip().casefold()
+    endpoint = (api_base if api_base is not None else config.api_base) or ""
+    try:
+        hostname = (urlsplit(endpoint).hostname or "").casefold()
+    except ValueError:
+        hostname = ""
+    if hostname == "api.groq.com" and model_id.startswith("openai/gpt-oss-"):
+        return "low"
+    return None
 
 
 def load_config(

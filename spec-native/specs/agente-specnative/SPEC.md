@@ -6,9 +6,9 @@ id            = "SPEC-0001"
 state         = "active"
 owner         = "rafex"
 created_at    = "2026-09-17"
-updated_at    = "2026-09-25"
+updated_at    = "2026-09-26"
 replaces      = "none"
-related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006", "TASK-AGENTE-SPECNATIV-0007", "TASK-AGENTE-SPECNATIV-0008"]
+related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006", "TASK-AGENTE-SPECNATIV-0007", "TASK-AGENTE-SPECNATIV-0008", "TASK-AGENTE-SPECNATIV-0014"]
 related_decisions = ["DEC-0001"]
 artifacts     = ["pilot/", ".specnative/specnative_mcp.py"]
 validation    = ["cargo test", "specnative validate", "walkthrough de conversación"]
@@ -76,6 +76,13 @@ Excluye:
   explicar las variables de entorno aceptadas y ofrecer `asn --auth`. La
   autenticación debe cifrar credenciales SOPS/age globales o por proyecto,
   creando una identidad age de usuario si no existe.
+  creando una identidad age de usuario si no existe.
+- RF-9: Para Groq GPT-OSS, el esfuerzo de razonamiento será `low` cuando no
+  exista override. Si Groq devuelve el HTTP 400 específico de
+  `tool_choice=required` sin llamada a herramienta, ASN reintentará una sola
+  vez con una instrucción reforzada; un fallo persistente no escribirá archivos
+  y quedará registrado. `asn --test` debe comprobar una llamada requerida a
+  herramienta.
 
 ## Requisitos no funcionales
 

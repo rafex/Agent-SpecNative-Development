@@ -13,7 +13,7 @@ from .failure_log import record_failure
 from .history import HistoryStore
 from .intent import parse_template_command
 from .mcp import SpecNativeMcp
-from .model import build_model
+from .model import build_model, tool_call_attempts
 from .session import AgentSession
 from .templates import spec_template_names
 
@@ -137,19 +137,23 @@ class Controller:
                 except AgentGenerationError as error:
                     model = getattr(getattr(session, "agent", None), "model", None)
                     client_kwargs = getattr(model, "client_kwargs", {}) or {}
+                    model_kwargs = getattr(model, "kwargs", {}) or {}
+                    attempts = tool_call_attempts(error)
                     record_failure(
                         "agent_generation",
                         error,
                         model=getattr(model, "model_id", None) or self.config.model,
                         endpoint=client_kwargs.get("base_url") or self.config.api_base,
                         api_key=client_kwargs.get("api_key"),
+                        reasoning_effort=model_kwargs.get("reasoning_effort"),
+                        attempts=attempts,
                         include_traceback=True,
                     )
                     session.close()
                     self.say(
                         "Error del modelo: no pudo completar una llamada a herramienta. "
                         "ASN requiere un modelo y endpoint compatibles con tool calling. "
-                        "Revisa la configuración del proveedor y vuelve a iniciar ASN. "
+                        f"ASN realizó {attempts} intento(s). Revisa la configuración del proveedor y vuelve a iniciar ASN. "
                         "No se modificaron archivos."
                     )
                     return 2

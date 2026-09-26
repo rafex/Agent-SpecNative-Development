@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .config import load_config
+from .config import effective_reasoning_effort, load_config
 from .controller import Controller
 from .failure_log import record_failure
 from .mcp_discovery import resolve_project_repo
@@ -136,7 +136,11 @@ def main(preflight_default: bool = False) -> int:
         try:
             result = check_provider(
                 credentials,
-                reasoning_effort=config.reasoning_effort,
+                reasoning_effort=effective_reasoning_effort(
+                    config,
+                    model=credentials.model,
+                    api_base=credentials.api_base,
+                ),
                 on_request=lambda summary: print(summary),
             )
         except ProviderTestError as error:
@@ -163,6 +167,11 @@ def main(preflight_default: bool = False) -> int:
             model=credentials.model,
             endpoint=credentials.api_base,
             api_key=credentials.api_key,
+            reasoning_effort=effective_reasoning_effort(
+                config,
+                model=credentials.model,
+                api_base=credentials.api_base,
+            ),
             include_traceback=True,
         )
         print(f"Error del piloto: {error}")

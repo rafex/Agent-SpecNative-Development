@@ -176,6 +176,8 @@ class FailureLog:
         model: str | None = None,
         endpoint: str | None = None,
         api_key: str | None = None,
+        reasoning_effort: str | None = None,
+        attempts: int = 1,
         include_traceback: bool = False,
     ) -> None:
         message = _sanitize_text(str(error)[:2000], api_key)
@@ -187,6 +189,8 @@ class FailureLog:
             "endpoint": _safe_url(endpoint) if endpoint else None,
             "error_type": type(error).__name__,
             "message": message,
+            "reasoning_effort": reasoning_effort,
+            "attempts": max(1, attempts),
         }
         if include_traceback and error.__traceback__ is not None:
             rendered = "".join(traceback.format_exception(type(error), error, error.__traceback__))
@@ -204,6 +208,8 @@ def record_failure(
     model: str | None = None,
     endpoint: str | None = None,
     api_key: str | None = None,
+    reasoning_effort: str | None = None,
+    attempts: int = 1,
     include_traceback: bool = False,
 ) -> None:
     _default_failure_log.record_failure(
@@ -212,5 +218,7 @@ def record_failure(
         model=model,
         endpoint=endpoint,
         api_key=api_key,
+        reasoning_effort=reasoning_effort,
+        attempts=attempts,
         include_traceback=include_traceback,
     )

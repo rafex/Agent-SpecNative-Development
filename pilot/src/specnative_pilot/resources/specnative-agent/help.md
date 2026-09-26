@@ -28,9 +28,11 @@ Si falta el modelo o la credencial, configura `SPECNATIVE_AGENT_MODEL` y
 `OPENAI_API_KEY`, o ejecuta `asn --auth`. Para endpoints compatibles alternativos,
 configura también `SPECNATIVE_AGENT_API_BASE`.
 
-El modelo y endpoint deben admitir llamadas a herramientas (tool calling). Si
-el proveedor las rechaza, ASN termina la sesión sin aplicar cambios; revisa el
-modelo y la configuración del endpoint antes de reiniciar.
+El modelo y endpoint deben admitir llamadas a herramientas (tool calling). ASN
+reintenta una vez si Groq GPT-OSS responde que `tool_choice=required` no produjo
+una llamada; si vuelve a fallar, termina sin aplicar cambios. `asn --test`
+comprueba la llamada a herramienta antes de iniciar y el log registra el
+esfuerzo efectivo y el número de intentos, sin guardar prompts ni secretos.
 
 ## Ayuda de desarrollo
 

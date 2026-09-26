@@ -29,6 +29,10 @@ class _ProviderRequest:
     summary: str
 
 
+_PROBE_TOOL_NAME = "asn_tool_call_probe"
+_PROBE_VALUE = "ASN tool calling funciona"
+
+
 def _chat_completions_url(api_base: str | None) -> str:
     base = (api_base or "https://api.openai.com/v1").strip()
     parts = urlsplit(base)
@@ -79,7 +83,31 @@ def _mask_token(token: str) -> str:
 def _prepare_request(credentials: ResolvedCredentials, reasoning_effort: str | None = None) -> _ProviderRequest:
     payload = {
         "model": credentials.model,
-        "messages": [{"role": "user", "content": "Responde únicamente con OK."}],
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    f"Llama a {_PROBE_TOOL_NAME} con ok igual a `{_PROBE_VALUE}`. "
+                    "Devuelve exclusivamente la llamada a la herramienta."
+                ),
+            }
+        ],
+        "tools": [
+            {
+                "type": "function",
+                "function": {
+                    "name": _PROBE_TOOL_NAME,
+                    "description": "Valida que el proveedor puede emitir llamadas a herramientas.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"ok": {"type": "string"}},
+                        "required": ["ok"],
+                        "additionalProperties": False,
+                    },
+                },
+            }
+        ],
+        "tool_choice": "required",
         "max_completion_tokens": 1024,
     }
     if reasoning_effort:
@@ -183,12 +211,12 @@ def check_provider(
     try:
         choice = payload["choices"][0]
         message = choice["message"]
-        response = message.get("content")
     except (TypeError, KeyError, IndexError, AttributeError):
         raise ProviderTestError(
             f"El proveedor respondió HTTP {status_code}, pero el cuerpo no tiene el formato Chat Completions esperado."
         )
-    if not isinstance(response, str) or not response.strip():
+    tool_calls = message.get("tool_calls") if isinstance(message, dict) else None
+    if not isinstance(tool_calls, list) or len(tool_calls) != 1:
         details: list[str] = []
         finish_reason = choice.get("finish_reason")
         if finish_reason is not None:
@@ -196,9 +224,24 @@ def check_provider(
         if isinstance(message, dict):
             details.append("campos del mensaje=" + ", ".join(sorted(str(key) for key in message.keys())))
         suffix = f" ({'; '.join(details)})" if details else ""
-        raise ProviderTestError(f"El proveedor respondió HTTP {status_code}, pero no devolvió texto{suffix}.")
+        raise ProviderTestError(
+            f"El proveedor respondió HTTP {status_code}, pero no emitió exactamente una llamada a herramienta{suffix}."
+        )
+    try:
+        function = tool_calls[0]["function"]
+        arguments = function["arguments"]
+        if isinstance(arguments, str):
+            arguments = json.loads(arguments)
+    except (TypeError, KeyError, ValueError):
+        raise ProviderTestError(
+            f"El proveedor respondió HTTP {status_code}, pero la llamada de diagnóstico tiene argumentos inválidos."
+        )
+    if function.get("name") != _PROBE_TOOL_NAME or not isinstance(arguments, dict) or arguments.get("ok") != _PROBE_VALUE:
+        raise ProviderTestError(
+            f"El proveedor respondió HTTP {status_code}, pero la llamada de diagnóstico no coincide con la herramienta esperada."
+        )
     return ProviderTestResult(
         model=credentials.model,
-        response=_redact(response.strip(), credentials.api_key),
+        response=f"tool call `{_PROBE_TOOL_NAME}` validada",
         status_code=status_code,
     )

@@ -42,6 +42,8 @@ def test_failure_log_falls_back_to_user_directory_and_redacts_sensitive_values(t
             model="openai/gpt-oss-120b",
             endpoint="https://alice-secret:pass-secret@api.example.test/v1?token=private-value",
             api_key=token,
+            reasoning_effort="low",
+            attempts=2,
             include_traceback=True,
         )
 
@@ -50,6 +52,8 @@ def test_failure_log_falls_back_to_user_directory_and_redacts_sensitive_values(t
     rendered = path.read_text(encoding="utf-8")
     assert logger.path == path
     assert event["operation"] == "provider_test"
+    assert event["reasoning_effort"] == "low"
+    assert event["attempts"] == 2
     assert event["endpoint"] == "https://api.example.test/v1?token=%5BOCULTO%5D"
     assert "Traceback" in event["traceback"]
     for secret in (token, "alice-secret:pass-secret@", "private-value"):
