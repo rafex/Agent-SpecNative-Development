@@ -60,6 +60,24 @@ def test_failed_preflight_stops_before_model_or_writes(tmp_path):
     assert "Validation failed" in output.getvalue()
 
 
+def test_cli_displays_model_eval_path_at_session_start(tmp_path, monkeypatch):
+    output = StringIO()
+    mcp = FakeMcp("unused")
+
+    class Session:
+        eval_log_path = tmp_path / "asn-eval-demo" / "model-calls.jsonl"
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("specnative_pilot.controller.SpecNativeMcp", lambda *_: mcp)
+    monkeypatch.setattr("specnative_pilot.controller.AgentSession.from_mcp", lambda *_args, **_kwargs: Session())
+    controller = Controller(config(tmp_path), input_fn=lambda _: "/quit", output=output)
+
+    assert controller.run("demo") == 0
+    assert str(Session.eval_log_path) in output.getvalue()
+
+
 def _write_initiative(repo, base, slug, artifact):
     folder = repo / "spec-native" / base / slug
     folder.mkdir(parents=True)

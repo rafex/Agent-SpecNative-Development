@@ -8,7 +8,7 @@ owner         = "rafex"
 created_at    = "2026-09-17"
 updated_at    = "2026-09-26"
 replaces      = "none"
-related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006", "TASK-AGENTE-SPECNATIV-0007", "TASK-AGENTE-SPECNATIV-0008", "TASK-AGENTE-SPECNATIV-0014", "TASK-AGENTE-SPECNATIV-0015"]
+related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006", "TASK-AGENTE-SPECNATIV-0007", "TASK-AGENTE-SPECNATIV-0008", "TASK-AGENTE-SPECNATIV-0014", "TASK-AGENTE-SPECNATIV-0015", "TASK-AGENTE-SPECNATIV-0016", "TASK-AGENTE-SPECNATIV-0017"]
 related_decisions = ["DEC-0001"]
 artifacts     = ["pilot/", ".specnative/specnative_mcp.py"]
 validation    = ["cargo test", "specnative validate", "walkthrough de conversación"]
@@ -86,6 +86,12 @@ Excluye:
 - RF-10: Al elegir una iniciativa, el CLI debe sugerir slugs existentes durante
   la escritura y advertir antes de continuar con un slug nuevo que difiera por
   una sola edición de uno existente.
+- RF-11: Cada llamada conversacional efectuada al proveedor debe quedar en un
+  eval JSONL privado temporal con el payload enviado, la respuesta o error y la
+  duración; el reintento de Groq debe usar un formato de mensajes serializable.
+- RF-12: `asn --version` debe mostrar la versión instalada e incluir el hash del
+  commit Git del que se construyó el paquete, sin leer configuración ni iniciar
+  conexiones externas.
 
 ## Requisitos no funcionales
 
@@ -133,6 +139,15 @@ Excluye:
 - Dado que existe `portal-captive`, cuando el usuario escribe `portal-captives`
   como slug nuevo, entonces ASN advierte de la coincidencia cercana y requiere
   confirmación para continuar con un segundo slug.
+- Dada una sesión del agente, cuando se efectúa una llamada al modelo, entonces
+  el eval conserva el request JSON, la respuesta/error y la latencia sin headers
+  de autenticación, y su ruta queda disponible en CLI y en `agent_session_start`.
+- Dada una respuesta HTTP 400 de Groq por no llamar una herramienta, cuando ASN
+  reintenta, entonces smolagents serializa correctamente el mensaje y el
+  contador refleja sólo las llamadas que llegaron al cliente del proveedor.
+- Dado un paquete ASN construido desde un commit Git, cuando el usuario ejecuta
+  `asn --version`, entonces se muestra una versión que incluye el hash de ese
+  commit antes de cargar credenciales o configuración.
 
 ## Dependencias y riesgos
 

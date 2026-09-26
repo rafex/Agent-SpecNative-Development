@@ -6,6 +6,10 @@ tags: [guia, agente, mcp, specnative]
 
 # Guía de uso del agente
 
+Ejecuta `asn --version` para consultar la versión instalada y el hash del
+commit de origen. ASN incorpora ese valor al construir el paquete desde un
+checkout Git; el comando termina antes de cargar credenciales o iniciar sesión.
+
 ASN ayuda a definir y refinar trabajo SpecNative antes de implementar. Para
 una iniciativa nueva, conversa sobre problema, usuarios, objetivo, alcance,
 requisitos, criterios de aceptación, riesgos y dependencias. Para una existente,
@@ -30,6 +34,14 @@ plantillas disponibles. En modo por bloques:
 ```bash
 asn --repo . --question-mode batch
 ```
+
+Cada sesión escribe un eval JSONL bajo una carpeta privada del directorio
+temporal del sistema. La CLI muestra la ruta al iniciar; `agent_session_start`
+la devuelve como `eval_log`. El eval contiene el request completo enviado al
+modelo, la respuesta o error y el tiempo de llamada. Puede contener el prompt,
+contexto del repositorio y datos sensibles; no contiene headers de autenticación
+ni el token. Se conserva después de cerrar ASN hasta que el sistema operativo
+limpie los temporales. El probe de `asn --test` queda excluido.
 
 ## MCP en un cliente de desarrollo
 

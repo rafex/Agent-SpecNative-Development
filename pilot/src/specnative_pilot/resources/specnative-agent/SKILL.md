@@ -19,6 +19,10 @@ El agente real es `asn-agent-mcp`; el MCP `specnative` es su backend. Usa
    exista una aprobación pendiente.
 5. Cierra con `agent_session_close`.
 
+`agent_session_start` devuelve `eval_log`, la ruta temporal al registro JSONL de
+llamadas al modelo. Incluye los requests completos, respuestas/errores y
+duración; trátalo como sensible porque conserva prompts y contexto enviados.
+
 Para una iniciativa nueva, guía preguntas sobre problema, usuarios, objetivo,
 alcance, requisitos, criterios de aceptación, riesgos y dependencias. Para una
 iniciativa existente, lee la spec y propone un diff antes de escribir.

@@ -6,6 +6,7 @@ from pathlib import Path
 from .config import effective_reasoning_effort, load_config
 from .controller import Controller
 from .failure_log import record_failure
+from . import __version__
 from .mcp_discovery import resolve_project_repo
 from .provider_check import ProviderTestError, check_provider
 from .secret_setup import SecretSetupError, authenticate, initialize_secrets
@@ -14,6 +15,7 @@ from .secrets import SecretResolutionError, credential_setup_message, missing_cr
 
 def main(preflight_default: bool = False) -> int:
     parser = argparse.ArgumentParser(description="Piloto interactivo de definición SpecNative")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("command", nargs="?", choices=["setup", "secrets"], help="Acción administrativa del proyecto")
     parser.add_argument("subcommand", nargs="?", choices=["init"], help="Subcomando administrativo")
     parser.add_argument("--repo", type=Path, help="Repositorio destino (por defecto, cwd o su proyecto SpecNative)")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -123,6 +124,30 @@ def test_manager_reports_missing_credentials_with_auth_command(tmp_path, monkeyp
     assert result["status"] == "credentials_missing"
     assert "OPENAI_API_KEY" in result["text"]
     assert "asn --auth" in result["text"]
+
+
+def test_manager_returns_model_eval_path_in_session_start(tmp_path, monkeypatch):
+    path = tmp_path / "asn-eval-demo" / "model-calls.jsonl"
+
+    class StartedSession:
+        session_id = "session-id"
+        eval_log_path = path
+
+        @staticmethod
+        def _result(status, text, **extra):
+            return {"status": status, "text": text, **extra}
+
+    monkeypatch.setattr(
+        "specnative_pilot.session.resolve_credentials",
+        lambda _: SimpleNamespace(model="model", api_base=None, api_key="test-key"),
+    )
+    monkeypatch.setattr("specnative_pilot.session.missing_credential_names", lambda *_: [])
+    monkeypatch.setattr("specnative_pilot.session.AgentSession.create", lambda *_args: StartedSession())
+
+    result = SessionManager(config(tmp_path)).start("demo")
+
+    assert result["status"] == "ready"
+    assert result["eval_log"] == str(path)
 
 
 def test_manager_logs_preflight_failure_without_returning_log_to_client(tmp_path, monkeypatch):

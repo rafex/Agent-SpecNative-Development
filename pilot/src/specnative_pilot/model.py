@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from urllib.parse import urlsplit
 
 from smolagents import OpenAIServerModel as _OpenAIServerModel
 
 from .config import Config, effective_reasoning_effort
+from .model_eval import ModelEvalLog, TracingOpenAIClient
 from .secrets import SecretResolutionError, resolve_credentials
 
 
@@ -19,7 +21,32 @@ _RETRY_INSTRUCTION = (
 class ToolCallRetryExhausted(RuntimeError):
     """Marks the final provider error after ASN's one targeted retry."""
 
-    asn_tool_call_attempts = 2
+    def __init__(self, error: BaseException, attempts: int) -> None:
+        super().__init__(str(error))
+        self.asn_tool_call_attempts = max(1, attempts)
+
+
+def _append_retry_instruction(messages):
+    retry_messages = deepcopy(messages)
+    if retry_messages:
+        last = retry_messages[-1]
+        role = last.get("role") if isinstance(last, dict) else last.role
+        if getattr(role, "value", role) == "user":
+            content = last.get("content") if isinstance(last, dict) else last.content
+            if isinstance(content, list):
+                content.append({"type": "text", "text": _RETRY_INSTRUCTION})
+            elif isinstance(content, str) and content:
+                content = f"{content}\n\n{_RETRY_INSTRUCTION}"
+            else:
+                content = _RETRY_INSTRUCTION
+            if isinstance(last, dict):
+                last["content"] = content
+            else:
+                last.content = content
+            return retry_messages
+
+    retry_messages.append({"role": "user", "content": _RETRY_INSTRUCTION})
+    return retry_messages
 
 
 def tool_call_attempts(error: BaseException) -> int:
@@ -36,6 +63,19 @@ def tool_call_attempts(error: BaseException) -> int:
 
 class OpenAIServerModel(_OpenAIServerModel):
     """OpenAI-compatible model with one narrowly scoped Groq tool-call retry."""
+
+    def __init__(self, *args, eval_log: ModelEvalLog | None = None, **kwargs) -> None:
+        self.eval_log = eval_log or ModelEvalLog()
+        super().__init__(*args, **kwargs)
+
+    def create_client(self):
+        client = super().create_client()
+        endpoint = (getattr(self, "client_kwargs", {}) or {}).get("base_url")
+        return TracingOpenAIClient(client, self.eval_log, self.model_id or "", endpoint)
+
+    @property
+    def eval_log_path(self):
+        return self.eval_log.path
 
     def _is_groq_gpt_oss(self) -> bool:
         model_id = (self.model_id or "").casefold()
@@ -60,6 +100,8 @@ class OpenAIServerModel(_OpenAIServerModel):
         tools_to_call_from=None,
         **kwargs,
     ):
+        eval_log = getattr(self, "eval_log", None)
+        calls_before = eval_log.request_count if eval_log is not None else 0
         try:
             return super().generate(
                 messages,
@@ -77,10 +119,7 @@ class OpenAIServerModel(_OpenAIServerModel):
             ):
                 raise
 
-        retry_messages = [
-            *messages,
-            {"role": "user", "content": _RETRY_INSTRUCTION},
-        ]
+        retry_messages = _append_retry_instruction(messages)
         try:
             return super().generate(
                 retry_messages,
@@ -90,7 +129,8 @@ class OpenAIServerModel(_OpenAIServerModel):
                 **kwargs,
             )
         except Exception as retry_error:
-            raise ToolCallRetryExhausted(str(retry_error)) from retry_error
+            attempts = eval_log.request_count - calls_before if eval_log is not None else 1
+            raise ToolCallRetryExhausted(retry_error, attempts) from retry_error
 
 
 def build_model(config: Config) -> OpenAIServerModel:

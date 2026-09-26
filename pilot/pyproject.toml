@@ -1,6 +1,6 @@
 [project]
 name = "specnative-agent-pilot"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Interactive SpecNative definition agent pilot"
 requires-python = ">=3.11"
 dependencies = [
@@ -19,8 +19,12 @@ asn-agent-mcp = "specnative_pilot.agent_mcp_server:main"
 specnative-agent = "specnative_pilot.cli:main"
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=68", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+root = ".."
+local_scheme = "node-and-date"
 
 [tool.setuptools.packages.find]
 where = ["src"]

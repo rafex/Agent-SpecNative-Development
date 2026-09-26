@@ -99,6 +99,12 @@ class AgentSession:
         self.context = context
         return self
 
+    @property
+    def eval_log_path(self) -> Path | None:
+        model = getattr(self.agent, "model", None)
+        path = getattr(model, "eval_log_path", None)
+        return Path(path) if path is not None else None
+
     @classmethod
     def create(
         cls,
@@ -273,7 +279,11 @@ class SessionManager:
             )
             return {"status": "error", "text": str(error)}
         self.sessions[session.session_id] = session
-        return session._result("ready", "Sesión ASN iniciada.")
+        return session._result(
+            "ready",
+            "Sesión ASN iniciada.",
+            eval_log=str(session.eval_log_path) if session.eval_log_path is not None else None,
+        )
 
     def get(self, session_id: str) -> AgentSession:
         session = self.sessions.get(session_id)

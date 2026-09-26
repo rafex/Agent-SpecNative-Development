@@ -3,6 +3,22 @@ from specnative_pilot.provider_check import ProviderTestError, ProviderTestResul
 from specnative_pilot.secrets import ResolvedCredentials
 
 
+def test_cli_version_exits_before_loading_config(monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", ["asn", "--version"])
+    monkeypatch.setattr(cli, "load_config", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("no debe cargar configuración")))
+
+    try:
+        cli.main()
+    except SystemExit as error:
+        assert error.code == 0
+    else:
+        raise AssertionError("argparse debe salir tras mostrar la versión")
+
+    output = capsys.readouterr().out.strip()
+    assert output.startswith("asn ")
+    assert cli.__version__ in output
+
+
 def test_cli_reports_missing_model_and_auth_guidance(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))

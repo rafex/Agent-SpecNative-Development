@@ -191,6 +191,9 @@ class Controller:
                 return 2
             initiative = initiative or self.choose_initiative(mcp)
             session = AgentSession.from_mcp(self.config, initiative, mcp, owns_mcp=False)
+            eval_log_path = getattr(session, "eval_log_path", None)
+            if eval_log_path is not None:
+                self.say(f"Eval de llamadas al modelo: {eval_log_path}")
             self.say("Piloto SpecNative iniciado. Usa /template nombre, /help o /quit.")
             while True:
                 message = self.input("\n> ").strip()

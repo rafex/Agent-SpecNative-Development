@@ -302,3 +302,43 @@ completion_evidence = ["XDG_CONFIG_HOME=/tmp/asn-test-config XDG_STATE_HOME=/tmp
 ```
 
 Completar slugs desde `spec-native/specs/` y `spec-native/tasks/`, reutilizar una coincidencia cercana al rechazar la creación y permitirla sólo tras confirmación explícita.
+
+### TASK-AGENTE-SPECNATIV-0016 - Registrar eval de modelos y corregir el formato del reintento
+
+> **Update 2026-09-26T19:08:14Z:** Implementando eval JSONL temporal y protegido en llamadas del modelo, salida de ruta en CLI/MCP y retry serializable con contador de requests efectivamente enviados.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0016"
+title = "Registrar eval de modelos y corregir el formato del reintento"
+state = "done"
+priority = "p1"
+owner = "rafex"
+labels = ["agent", "diagnostics", "provider"]
+dependencies = ["TASK-AGENTE-SPECNATIV-0014"]
+expected_files = ["pilot/src/specnative_pilot/model_eval.py", "pilot/src/specnative_pilot/model.py", "pilot/src/specnative_pilot/session.py", "pilot/tests/test_model_eval.py", "pilot/tests/test_model.py"]
+close_criteria = "Cada llamada conversacional al proveedor deja un registro JSONL en una carpeta temporal privada con payload, respuesta/error y duración, y la ruta se expone en CLI/MCP. El retry de Groq usa contenido compatible con smolagents y cuenta sólo llamadas enviadas."
+validation = ["uv run --project pilot pytest -q", "uv lock --check --project pilot", "make docs", "git diff --check", "specnative validate"]
+completion_evidence = ["`XDG_CONFIG_HOME=/tmp/asn-test-config XDG_STATE_HOME=/tmp/asn-test-state uv run --project pilot pytest -q`: 97 passed; `uv lock --check --project pilot`: correcto; `make docs`: compilación correcta; `git diff --check`: correcto; MCP `validate`: 15 archivos y referencias válidos; MCP `health_check`: 8/8 documentos saludables. Pruebas simuladas; sin peticiones reales al proveedor."]
+```
+
+Guardar trazas exactas del cuerpo de cada llamada conversacional del agente en temporales privados (sin headers de autenticación), exponer su ubicación e impedir que un error local al serializar el retry se cuente como petición enviada.
+
+### TASK-AGENTE-SPECNATIV-0017 - Mostrar version ASN asociada al commit
+
+> **Update 2026-09-26T19:23:50Z:** Agregada como requisito: versión de distribución asociada al hash Git; inicio implementación de build metadata y flag CLI.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0017"
+title = "Mostrar version ASN asociada al commit"
+state = "done"
+priority = "p1"
+owner = "rafex"
+labels = ["cli", "release"]
+dependencies = []
+expected_files = ["pilot/pyproject.toml", "pilot/src/specnative_pilot/cli.py", "pilot/tests/test_cli.py"]
+close_criteria = "El paquete ASN obtiene en build una versión reproducible desde Git, `asn --version` la muestra incluyendo el hash del commit y sale sin leer configuración, credenciales ni conectar al proveedor."
+validation = ["pytest de pilot incluyendo el comando --version", "uv lock --check --project pilot", "build del paquete que demuestre versión con hash", "instalación local y verificación de asn --version", "make docs", "git diff --check", "specnative validate"]
+completion_evidence = ["`XDG_CONFIG_HOME=/tmp/asn-test-config XDG_STATE_HOME=/tmp/asn-test-state uv run --project pilot pytest -q`: 98 passed; `uv lock --check --project pilot`: correcto; `make docs`: build correcto; `git diff --check`: correcto; `uv build --project pilot --no-sources`: wheel y sdist contienen `Version: 0.2.1.dev8+gc039691fa.d20260926`; `uv run --project pilot asn --version` mostró el hash del HEAD; MCP `validate`: 15 referencias válidas; `health_check`: 8/8 documentos saludables. La instalación final se verificará tras publicar el commit."]
+```
+
+Generar metadatos de versión desde el commit Git al construir ASN e incluirlos en la salida inmediata `asn --version` para identificar la versión instalada.
