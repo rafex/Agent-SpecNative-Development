@@ -43,8 +43,10 @@ token. `asn --test` no se incluye en este eval; `asn --test-mcp` sí genera
 un eval del ciclo de diagnóstico.
 
 El modelo y endpoint deben admitir llamadas a herramientas (tool calling). ASN
-reintenta una vez si Groq GPT-OSS responde que `tool_choice=required` no produjo
-una llamada; si vuelve a fallar, termina sin aplicar cambios. `asn --test`
+configura Groq GPT-OSS con `tool_choice=auto` para permitir que el agente
+termine con una respuesta normal después de ejecutar herramientas. Si se fuerza
+`tool_choice=required` y el proveedor rechaza la llamada, ASN reintenta una vez;
+si vuelve a fallar, termina sin aplicar cambios. `asn --test`
 comprueba la llamada a herramienta antes de iniciar y el log de fallas registra
 el esfuerzo efectivo y el número de peticiones enviadas, sin guardar prompts.
 

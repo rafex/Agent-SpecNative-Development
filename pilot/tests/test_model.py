@@ -1,7 +1,14 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from smolagents.models import ChatMessage, MessageRole, get_clean_message_list, tool_role_conversions
+from smolagents.models import (
+    ChatMessage,
+    ChatMessageToolCall,
+    ChatMessageToolCallFunction,
+    MessageRole,
+    get_clean_message_list,
+    tool_role_conversions,
+)
 
 from specnative_pilot import model
 from specnative_pilot.config import Config
@@ -70,6 +77,75 @@ def test_build_model_defaults_groq_gpt_oss_to_low(monkeypatch):
     model.build_model(_config(None))
 
     assert captured["reasoning_effort"] == "low"
+    assert captured["tool_choice"] == "auto"
+
+
+def test_build_model_leaves_tool_choice_default_for_other_providers(monkeypatch):
+    captured = {}
+
+    def fake_model(**kwargs):
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(
+        model,
+        "resolve_credentials",
+        lambda config: ResolvedCredentials("other-model", "https://api.example.test/v1", "key"),
+    )
+    monkeypatch.setattr(model, "OpenAIServerModel", fake_model)
+
+    model.build_model(_config(None))
+
+    assert "tool_choice" not in captured
+
+
+def test_groq_gpt_oss_normalizes_direct_text_to_final_answer():
+    message = ChatMessage(role=MessageRole.ASSISTANT, content="The MCP call succeeded.")
+
+    result = _groq_model_instance().parse_tool_calls(message)
+
+    assert result.tool_calls[0].function.name == "final_answer"
+    assert result.tool_calls[0].function.arguments == {"answer": "The MCP call succeeded."}
+
+
+def test_groq_gpt_oss_normalizes_json_pseudo_tool_only_for_final_answer_shape():
+    message = ChatMessage(
+        role=MessageRole.ASSISTANT,
+        tool_calls=[
+            ChatMessageToolCall(
+                id="call-json",
+                type="function",
+                function=ChatMessageToolCallFunction(
+                    name="json",
+                    arguments='{"answer":"ASN_MCP_OK"}',
+                ),
+            )
+        ],
+    )
+
+    result = _groq_model_instance().parse_tool_calls(message)
+
+    assert result.tool_calls[0].function.name == "final_answer"
+    assert result.tool_calls[0].function.arguments == {"answer": "ASN_MCP_OK"}
+
+
+def test_other_providers_do_not_rewrite_json_tool_calls():
+    instance = _groq_model_instance()
+    instance.client_kwargs = {"base_url": "https://api.example.test/v1"}
+    message = ChatMessage(
+        role=MessageRole.ASSISTANT,
+        tool_calls=[
+            ChatMessageToolCall(
+                id="call-json",
+                type="function",
+                function=ChatMessageToolCallFunction(name="json", arguments={"answer": "value"}),
+            )
+        ],
+    )
+
+    result = instance.parse_tool_calls(message)
+
+    assert result.tool_calls[0].function.name == "json"
 
 
 class _ProviderError(RuntimeError):
@@ -81,6 +157,8 @@ def _groq_model_instance():
     instance.model_id = "openai/gpt-oss-120b"
     instance.client_kwargs = {"base_url": "https://api.groq.com/openai/v1"}
     instance.kwargs = {}
+    instance.tool_name_key = "name"
+    instance.tool_arguments_key = "arguments"
     instance.eval_log = _RequestCounter()
     return instance
 

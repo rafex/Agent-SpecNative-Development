@@ -118,6 +118,10 @@ def test_manager_reports_preflight_without_building_model(tmp_path, monkeypatch)
 
 def test_manager_reports_missing_credentials_with_auth_command(tmp_path, monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "specnative_pilot.session.resolve_credentials",
+        lambda config: SimpleNamespace(model=config.model, api_base=config.api_base, api_key=None),
+    )
     monkeypatch.setattr("specnative_pilot.session.record_failure", lambda *args, **kwargs: None)
     monkeypatch.setattr("specnative_pilot.session.SpecNativeMcp", lambda *_: pytest.fail("MCP must not start"))
     result = SessionManager(config(tmp_path)).start("demo")
