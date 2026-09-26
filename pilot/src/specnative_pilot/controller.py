@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Callable, TextIO
+
+from smolagents.utils import AgentGenerationError
 
 from .agent import SpecNativeAgent
 from .config import Config
@@ -25,6 +29,32 @@ class Controller:
 
     def confirm(self, prompt: str) -> bool:
         return self.input(f"{prompt} [s/N] ").strip().lower() in {"s", "si", "sí", "y", "yes"}
+
+    def show_help(self) -> None:
+        help_path = Path(__file__).parent / "resources" / "specnative-agent" / "help.md"
+        try:
+            markdown = help_path.read_text(encoding="utf-8")
+        except OSError:
+            self.say("No se pudo cargar la ayuda de ASN desde el paquete instalado.")
+            return
+
+        mdcat = shutil.which("mdcat")
+        if mdcat:
+            try:
+                rendered = subprocess.run(
+                    [mdcat, "--ansi", "--no-pager", str(help_path)],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+            except OSError:
+                rendered = None
+            if rendered is not None and rendered.returncode == 0 and rendered.stdout:
+                self.output.write(rendered.stdout)
+                if not rendered.stdout.endswith("\n"):
+                    self.output.write("\n")
+                return
+        self.say(markdown)
 
     def choose_initiative(self, mcp: SpecNativeMcp) -> str:
         specs = mcp.call("list_specs")
@@ -89,11 +119,21 @@ class Controller:
                     session.close()
                     return 0
                 if message == "/help":
-                    self.say("Escribe la idea o responde preguntas. /template nombre aplica una plantilla sólo tras confirmación.")
+                    self.show_help()
                     continue
                 if not message:
                     continue
-                result = session.message(message)
+                try:
+                    result = session.message(message)
+                except AgentGenerationError:
+                    session.close()
+                    self.say(
+                        "Error del modelo: no pudo completar una llamada a herramienta. "
+                        "ASN requiere un modelo y endpoint compatibles con tool calling. "
+                        "Revisa la configuración del proveedor y vuelve a iniciar ASN. "
+                        "No se modificaron archivos."
+                    )
+                    return 2
                 self.say(str(result.get("text", "")))
                 if result.get("status") != "approval_required":
                     continue

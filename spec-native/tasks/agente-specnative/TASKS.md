@@ -188,3 +188,23 @@ completion_evidence = ["`make docs` ejecutó `mkdocs build --strict --config-fil
 ```
 
 Crear guías en español para instalar/configurar ASN, usar correctamente el flujo del agente y contribuir/desarrollar el piloto; añadir un sitio MkDocs Material con comandos locales docs y serve.
+
+### TASK-AGENTE-SPECNATIV-0010 - Mostrar ayuda Markdown y manejar fallos de tool calling
+
+> **Update 2026-09-25T20:34:37Z:** Implementando /help con Markdown empaquetado y mdcat, y manejo controlado del error de generación de herramientas.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0010"
+title = "Mostrar ayuda Markdown y manejar fallos de tool calling"
+state = "done"
+priority = "p1"
+owner = "rafex"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "/help muestra docs/man_help.md completo desde una instalación distribuida, renderizado con mdcat cuando está disponible y con fallback legible cuando falta. AgentGenerationError se informa sin traceback, cierra MCP/sesión con código no cero, no reintenta automáticamente y no escribe archivos."
+validation = ["Verificar /help desde un paquete instalado con mdcat disponible y ausente", "Simular AgentGenerationError al enviar un mensaje y confirmar salida limpia sin escrituras"]
+completion_evidence = ["`uv run --project pilot --extra dev --locked -- python -m pytest -q pilot/tests/test_policy.py`: 6 passed; `make docs`: build estricto correcto con el snippet de ayuda; `uv build --project pilot --out-dir /tmp/asn-help-dist`: wheel y sdist creados, comprobado que el wheel incluye `specnative_pilot/resources/specnative-agent/help.md`; `git diff --check` correcto."]
+```
+
+Ampliar /help para renderizar el manual Markdown empaquetado con mdcat y manejar AgentGenerationError de proveedores tool-calling con salida clara, cierre seguro y sin reintentos automáticos.

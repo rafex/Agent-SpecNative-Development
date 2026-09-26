@@ -1,8 +1,11 @@
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
+
+from smolagents.utils import AgentGenerationError
 
 from specnative_pilot.config import Config
-from specnative_pilot.controller import Controller
+from specnative_pilot.controller import Controller, SpecNativeMcp
 
 
 class FakeMcp:
@@ -15,6 +18,12 @@ class FakeMcp:
         if name == "list_templates":
             return self.listing
         return "ok"
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return None
 
 
 def config(tmp_path):
@@ -49,3 +58,61 @@ def test_failed_preflight_stops_before_model_or_writes(tmp_path):
     assert controller.run_preflight(mcp) is False
     assert mcp.call("validate") == "Validation failed:\n  - missing context"
     assert "Validation failed" in output.getvalue()
+
+
+def test_help_uses_mdcat_when_available(tmp_path, monkeypatch):
+    output = StringIO()
+    calls = []
+    controller = Controller(config(tmp_path), output=output)
+
+    monkeypatch.setattr("specnative_pilot.controller.shutil.which", lambda _: "/usr/bin/mdcat")
+
+    def render(command, **kwargs):
+        calls.append((command, kwargs))
+        return SimpleNamespace(returncode=0, stdout="\u001b[1mRendered help\u001b[0m\n")
+
+    monkeypatch.setattr("specnative_pilot.controller.subprocess.run", render)
+    controller.show_help()
+
+    assert calls[0][0][:3] == ["/usr/bin/mdcat", "--ansi", "--no-pager"]
+    assert output.getvalue() == "\u001b[1mRendered help\u001b[0m\n"
+
+
+def test_help_falls_back_to_markdown_when_mdcat_is_missing(tmp_path, monkeypatch):
+    output = StringIO()
+    controller = Controller(config(tmp_path), output=output)
+    monkeypatch.setattr("specnative_pilot.controller.shutil.which", lambda _: None)
+
+    controller.show_help()
+
+    assert "# Ayuda de ASN" in output.getvalue()
+    assert "/template <nombre>" in output.getvalue()
+
+
+def test_generation_error_exits_cleanly_without_writes(tmp_path, monkeypatch):
+    output = StringIO()
+    controller = Controller(config(tmp_path), input_fn=lambda _: "describir idea", output=output)
+    mcp = FakeMcp("unused")
+    monkeypatch.setattr("specnative_pilot.controller.SpecNativeMcp", lambda *_: mcp)
+
+    class BrokenSession:
+        closed = False
+
+        def message(self, _):
+            logger = SimpleNamespace(log_error=lambda _: None)
+            raise AgentGenerationError("provider rejected tool call", logger)
+
+        def close(self):
+            self.closed = True
+
+    session = BrokenSession()
+    monkeypatch.setattr("specnative_pilot.controller.AgentSession.from_mcp", lambda *_args, **_kwargs: session)
+
+    result = controller.run("portal-captive")
+
+    assert result == 2
+    assert session.closed
+    assert "compatibles con tool calling" in output.getvalue()
+    assert "No se modificaron archivos" in output.getvalue()
+    assert "Traceback" not in output.getvalue()
+    assert not [name for name, _ in mcp.calls if name.startswith("write_")]

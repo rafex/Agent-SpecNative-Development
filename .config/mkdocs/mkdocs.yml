@@ -21,6 +21,9 @@ markdown_extensions:
   - attr_list
   - meta
   - pymdownx.details
+  - pymdownx.snippets:
+      base_path:
+        - .
   - pymdownx.superfences
   - toc:
       permalink: true

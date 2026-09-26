@@ -1,16 +1,12 @@
 ---
 title: help
-description: Muestra la ayuda de las tareas Just.
-tags: [referencia, asn, desarrollo]
+description: Ayuda interactiva de ASN y ayuda de las tareas de desarrollo.
+tags: [referencia, asn, agente, desarrollo]
 ---
 
 # help
 
-Incluye también las tareas de documentación `make docs` y `make serve`.
+Esta página comparte el contenido con la ayuda Markdown incluida en el paquete
+ASN, que `/help` renderiza en la sesión cuando `mdcat` está disponible.
 
-Muestra las tareas disponibles para el piloto.
-
-```bash
-make help
-just help
-```
+--8<-- "pilot/src/specnative_pilot/resources/specnative-agent/help.md"
