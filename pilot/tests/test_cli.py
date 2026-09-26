@@ -1,4 +1,7 @@
+import pytest
+
 from specnative_pilot import cli
+from specnative_pilot.mcp_check import AgentMcpTestError, AgentMcpTestResult
 from specnative_pilot.provider_check import ProviderTestError, ProviderTestResult
 from specnative_pilot.secrets import ResolvedCredentials
 
@@ -86,6 +89,56 @@ def test_cli_test_checks_provider_without_starting_controller(tmp_path, monkeypa
     assert "Petición de diagnóstico" in output
     assert "Proveedor validado" in output
     assert called["reasoning_effort"] == "low"
+
+
+def test_cli_test_mcp_runs_full_agent_cycle_without_controller(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", ["asn", "--test-mcp", "--repo", str(tmp_path)])
+    monkeypatch.setattr(cli, "resolve_project_repo", lambda path: tmp_path)
+    credentials = ResolvedCredentials("mock-model", "https://provider.example/v1", "key")
+    monkeypatch.setattr(cli, "resolve_credentials", lambda config: credentials)
+    monkeypatch.setattr(cli, "missing_credential_names", lambda config, resolved: [])
+    called = {}
+
+    def fake_check(config):
+        called["repo"] = config.repo
+        return AgentMcpTestResult("mock-model", 245, 2, tmp_path / "eval.jsonl")
+
+    monkeypatch.setattr(cli, "check_agent_mcp", fake_check)
+    monkeypatch.setattr(cli, "Controller", lambda *_: (_ for _ in ()).throw(AssertionError("no interactive agent")))
+
+    assert cli.main() == 0
+    output = capsys.readouterr().out
+    assert called["repo"] == tmp_path
+    assert "continuó tras recibir la respuesta" in output
+    assert "Peticiones al modelo: 2" in output
+    assert str(tmp_path / "eval.jsonl") in output
+
+
+def test_cli_test_mcp_reports_stage_and_records_failure(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("sys.argv", ["asn", "--test-mcp", "--repo", str(tmp_path)])
+    monkeypatch.setattr(cli, "resolve_project_repo", lambda path: tmp_path)
+    credentials = ResolvedCredentials("mock-model", "https://provider.example/v1", "key")
+    monkeypatch.setattr(cli, "resolve_credentials", lambda config: credentials)
+    monkeypatch.setattr(cli, "missing_credential_names", lambda config, resolved: [])
+    error = AgentMcpTestError("continuación tras MCP", "el agente no pudo continuar", request_count=2)
+    monkeypatch.setattr(cli, "check_agent_mcp", lambda config: (_ for _ in ()).throw(error))
+    logged = []
+    monkeypatch.setattr(cli, "record_failure", lambda *args, **kwargs: logged.append((args, kwargs)))
+
+    assert cli.main() == 2
+    output = capsys.readouterr().out
+    assert "continuación tras MCP" in output
+    assert logged[0][0][0] == "agent_mcp_test"
+    assert logged[0][1]["attempts"] == 2
+
+
+def test_cli_rejects_combining_provider_and_mcp_tests(monkeypatch):
+    monkeypatch.setattr("sys.argv", ["asn", "--test", "--test-mcp"])
+
+    with pytest.raises(SystemExit) as error:
+        cli.main()
+
+    assert error.value.code == 2
 
 
 def test_cli_test_stops_before_curl_when_credentials_are_missing(tmp_path, monkeypatch, capsys):

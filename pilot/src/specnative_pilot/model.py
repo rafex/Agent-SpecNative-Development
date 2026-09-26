@@ -36,16 +36,25 @@ def _append_retry_instruction(messages):
             if isinstance(content, list):
                 content.append({"type": "text", "text": _RETRY_INSTRUCTION})
             elif isinstance(content, str) and content:
-                content = f"{content}\n\n{_RETRY_INSTRUCTION}"
+                content = [
+                    {"type": "text", "text": content},
+                    {"type": "text", "text": _RETRY_INSTRUCTION},
+                ]
             else:
-                content = _RETRY_INSTRUCTION
+                content = [{"type": "text", "text": _RETRY_INSTRUCTION}]
             if isinstance(last, dict):
                 last["content"] = content
             else:
                 last.content = content
             return retry_messages
 
-    retry_messages.append({"role": "user", "content": _RETRY_INSTRUCTION})
+    # Tool responses are normalized to the user role by smolagents. A text
+    # string in a new adjacent user message trips get_clean_message_list's
+    # same-role merge assertion; structured text blocks are mergeable.
+    retry_messages.append({
+        "role": "user",
+        "content": [{"type": "text", "text": _RETRY_INSTRUCTION}],
+    })
     return retry_messages
 
 

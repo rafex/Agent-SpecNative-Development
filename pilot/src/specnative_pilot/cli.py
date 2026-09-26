@@ -6,6 +6,7 @@ from pathlib import Path
 from .config import effective_reasoning_effort, load_config
 from .controller import Controller
 from .failure_log import record_failure
+from .mcp_check import AgentMcpTestError, check_agent_mcp
 from . import __version__
 from .mcp_discovery import resolve_project_repo
 from .provider_check import ProviderTestError, check_provider
@@ -21,6 +22,7 @@ def main(preflight_default: bool = False) -> int:
     parser.add_argument("--repo", type=Path, help="Repositorio destino (por defecto, cwd o su proyecto SpecNative)")
     parser.add_argument("--auth", action="store_true", help="Configura credenciales ASN cifradas con SOPS/age")
     parser.add_argument("--test", action="store_true", help="Valida URL, modelo y token con una petición corta vía curl")
+    parser.add_argument("--test-mcp", action="store_true", help="Prueba el ciclo del agente con una tool MCP de lectura")
     parser.add_argument("--clients", choices=["all", "codex", "claude", "opencode"], default="all")
     parser.add_argument("--backend", choices=["sops", "gopass"], help="Backend para `asn secrets init`")
     parser.add_argument("--prefix", help="Prefijo de referencias para gopass")
@@ -39,8 +41,10 @@ def main(preflight_default: bool = False) -> int:
         help="Valida el contexto antes de iniciar el modelo",
     )
     args = parser.parse_args()
-    if args.test and (args.command is not None or args.subcommand is not None or args.auth):
-        parser.error("`--test` no se combina con comandos administrativos ni `--auth`")
+    if args.test and args.test_mcp:
+        parser.error("--test y --test-mcp son pruebas independientes y no se pueden combinar")
+    if (args.test or args.test_mcp) and (args.command is not None or args.subcommand is not None or args.auth):
+        parser.error("las pruebas no se combinan con comandos administrativos ni --auth")
     if args.auth:
         if args.command is not None or args.subcommand is not None:
             parser.error("`--auth` no se combina con otro comando")
@@ -156,6 +160,49 @@ def main(preflight_default: bool = False) -> int:
             print(f"Falló la validación del proveedor: {error}")
             return 2
         print(f"Proveedor validado: modelo `{result.model}`, HTTP {result.status_code}, respuesta: {result.response}")
+        return 0
+    if args.test_mcp:
+        try:
+            result = check_agent_mcp(config)
+        except AgentMcpTestError as error:
+            record_failure(
+                "agent_mcp_test",
+                error,
+                model=credentials.model,
+                endpoint=credentials.api_base,
+                api_key=credentials.api_key,
+                reasoning_effort=effective_reasoning_effort(
+                    config,
+                    model=credentials.model,
+                    api_base=credentials.api_base,
+                ),
+                attempts=error.request_count,
+            )
+            print(f"Falló la prueba agente-MCP en etapa {error.stage}: {error}")
+            print(f"Peticiones al modelo: {error.request_count}")
+            if error.eval_log_path is not None:
+                print(f"Eval temporal: {error.eval_log_path}")
+            return 2
+        except (OSError, RuntimeError, ValueError) as error:
+            record_failure(
+                "agent_mcp_test",
+                error,
+                model=credentials.model,
+                endpoint=credentials.api_base,
+                api_key=credentials.api_key,
+                reasoning_effort=effective_reasoning_effort(
+                    config,
+                    model=credentials.model,
+                    api_base=credentials.api_base,
+                ),
+            )
+            print(f"Falló la prueba agente-MCP: {error}")
+            return 2
+        print("Prueba agente-MCP validada: el agente llamó a status y continuó tras recibir la respuesta.")
+        print(f"Modelo: {result.model}")
+        print(f"Peticiones al modelo: {result.request_count}; duración: {result.elapsed_ms:.0f} ms")
+        if result.eval_log_path is not None:
+            print(f"Eval temporal: {result.eval_log_path}")
         return 0
     try:
         return Controller(config).run(args.initiative, preflight=args.preflight)

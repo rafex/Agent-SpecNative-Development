@@ -39,13 +39,19 @@ petición conversacional, la respuesta o error del proveedor y la duración. ASN
 muestra la ruta al iniciar. Incluye el contexto enviado y puede contener datos
 sensibles; el directorio tiene permisos privados y el sistema operativo elimina
 los temporales según su política. No registra headers de autenticación ni el
-token. `asn --test` no se incluye en este eval.
+token. `asn --test` no se incluye en este eval; `asn --test-mcp` sí genera
+un eval del ciclo de diagnóstico.
 
 El modelo y endpoint deben admitir llamadas a herramientas (tool calling). ASN
 reintenta una vez si Groq GPT-OSS responde que `tool_choice=required` no produjo
 una llamada; si vuelve a fallar, termina sin aplicar cambios. `asn --test`
 comprueba la llamada a herramienta antes de iniciar y el log de fallas registra
 el esfuerzo efectivo y el número de peticiones enviadas, sin guardar prompts.
+
+`asn --test-mcp --repo .` valida también el ciclo completo con el servidor
+MCP configurado: el agente llama a la tool de solo lectura `status`, procesa
+su respuesta y termina. Hace llamadas reales al modelo, puede consumir cuota y
+muestra la etapa del error, el número de peticiones y la ruta del eval temporal.
 
 ## Ayuda de desarrollo
 

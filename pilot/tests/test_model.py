@@ -1,7 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from smolagents.models import ChatMessage, MessageRole, get_clean_message_list
+from smolagents.models import ChatMessage, MessageRole, get_clean_message_list, tool_role_conversions
 
 from specnative_pilot import model
 from specnative_pilot.config import Config
@@ -120,6 +120,49 @@ def test_groq_gpt_oss_retries_matching_missing_tool_call_once(monkeypatch):
     assert user_messages[0].content == [{"type": "text", "text": "describe an idea"}]
     assert requests[0][1] == requests[1][1]
     assert requests[1][1]["tools_to_call_from"] == [tool]
+
+
+def test_retry_after_tool_response_serializes_as_one_user_message():
+    messages = [
+        ChatMessage(
+            role=MessageRole.TOOL_CALL,
+            content=[{"type": "text", "text": "Calling status"}],
+        ),
+        ChatMessage(
+            role=MessageRole.TOOL_RESPONSE,
+            content=[{"type": "text", "text": "SpecNative status: healthy"}],
+        ),
+    ]
+
+    retry_messages = model._append_retry_instruction(messages)
+    serialized = get_clean_message_list(retry_messages, role_conversions=tool_role_conversions)
+
+    assert [message["role"] for message in serialized] == ["assistant", "user"]
+    assert len(serialized[1]["content"]) == 1
+    assert serialized[1]["content"][0]["text"].startswith("SpecNative status: healthy")
+    assert "La respuesta anterior no llamó ninguna herramienta" in serialized[1]["content"][0]["text"]
+    assert messages[-1].content == [{"type": "text", "text": "SpecNative status: healthy"}]
+
+
+def test_retry_normalizes_text_user_after_tool_response_before_role_merge():
+    messages = [
+        ChatMessage(
+            role=MessageRole.TOOL_RESPONSE,
+            content=[{"type": "text", "text": "MCP result"}],
+        ),
+        ChatMessage(role=MessageRole.USER, content="follow-up"),
+    ]
+
+    serialized = get_clean_message_list(
+        model._append_retry_instruction(messages),
+        role_conversions=tool_role_conversions,
+    )
+
+    assert len(serialized) == 1
+    assert serialized[0]["role"] == "user"
+    text = serialized[0]["content"][0]["text"]
+    assert text.startswith("MCP result\nfollow-up")
+    assert "La respuesta anterior no llamó ninguna herramienta" in text
 
 
 def test_groq_gpt_oss_second_missing_tool_call_failure_is_marked_as_two_attempts(monkeypatch):

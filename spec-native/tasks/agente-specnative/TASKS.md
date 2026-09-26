@@ -342,3 +342,23 @@ completion_evidence = ["Suite pilot: 98 passed; `uv lock --check --project pilot
 ```
 
 Generar metadatos de versión desde el commit Git al construir ASN e incluirlos en la salida inmediata `asn --version` para identificar la versión instalada.
+
+### TASK-AGENTE-SPECNATIV-0018 - Probar el ciclo completo de tools MCP en ASN
+
+> **Update 2026-09-26T20:02:21Z:** La eval del fallo de 2026-09-26 confirma que status/read_spec se invocan; el error está en serialización de la instrucción retry tras role-conversion tool-response a user. Implementando regresión y diagnóstico end-to-end.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0018"
+title = "Probar el ciclo completo de tools MCP en ASN"
+state = "done"
+priority = "p1"
+owner = "rafex"
+labels = ["agent", "diagnostics", "mcp"]
+dependencies = ["TASK-AGENTE-SPECNATIV-0016"]
+expected_files = ["pilot/src/specnative_pilot/mcp_check.py", "pilot/src/specnative_pilot/model.py", "pilot/src/specnative_pilot/cli.py", "pilot/tests/test_mcp_check.py"]
+close_criteria = "`asn --test-mcp` ejecuta una llamada real del agente a la tool MCP de solo lectura `status`, valida que el agente continúe después del resultado, muestra etapa, requests, duración y ubicación del eval; el retry Groq puede serializar el historial con tool-response sin error local."
+validation = ["uv run --project pilot pytest -q", "uv lock --check --project pilot", "make docs", "git diff --check", "specnative validate"]
+completion_evidence = ["`XDG_CONFIG_HOME=/tmp/asn-test-config XDG_STATE_HOME=/tmp/asn-test-state uv run --project pilot pytest -q`: 109 passed; cubre retry tras `tool-response`, ciclo real de ToolCallingAgent simulado, MCP status, fallos por etapa, límite de tools y CLI; `uv lock --check --project pilot`: correcto; `make docs`: correcto; `git diff --check`: correcto; MCP `validate`: 15 referencias válidas; `health_check`: 8/8 documentos saludables. Sin llamadas reales al proveedor."]
+```
+
+Agregar una prueba end-to-end del agente y MCP para diagnosticar fallas de tool calling y corregir el retry cuando smolagents normaliza resultados MCP al rol user.

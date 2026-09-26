@@ -35,13 +35,20 @@ plantillas disponibles. En modo por bloques:
 asn --repo . --question-mode batch
 ```
 
+Usa `asn --test` para probar el endpoint y la llamada a herramienta del
+proveedor. Usa `asn --test-mcp --repo .` para probar además el servidor MCP:
+el agente ejecuta `status` (solo lectura) y debe continuar hasta completar la
+respuesta. `--test-mcp` hace llamadas reales al modelo y puede consumir cuota;
+reporta la etapa fallida y la ruta del eval temporal.
+
 Cada sesión escribe un eval JSONL bajo una carpeta privada del directorio
 temporal del sistema. La CLI muestra la ruta al iniciar; `agent_session_start`
 la devuelve como `eval_log`. El eval contiene el request completo enviado al
 modelo, la respuesta o error y el tiempo de llamada. Puede contener el prompt,
 contexto del repositorio y datos sensibles; no contiene headers de autenticación
 ni el token. Se conserva después de cerrar ASN hasta que el sistema operativo
-limpie los temporales. El probe de `asn --test` queda excluido.
+limpie los temporales. El probe de `asn --test` queda excluido; `--test-mcp`
+sí registra su ciclo de diagnóstico en un eval temporal.
 
 ## MCP en un cliente de desarrollo
 

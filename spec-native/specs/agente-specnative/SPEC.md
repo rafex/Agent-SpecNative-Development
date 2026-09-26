@@ -8,7 +8,7 @@ owner         = "rafex"
 created_at    = "2026-09-17"
 updated_at    = "2026-09-26"
 replaces      = "none"
-related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006", "TASK-AGENTE-SPECNATIV-0007", "TASK-AGENTE-SPECNATIV-0008", "TASK-AGENTE-SPECNATIV-0014", "TASK-AGENTE-SPECNATIV-0015", "TASK-AGENTE-SPECNATIV-0016", "TASK-AGENTE-SPECNATIV-0017"]
+related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006", "TASK-AGENTE-SPECNATIV-0007", "TASK-AGENTE-SPECNATIV-0008", "TASK-AGENTE-SPECNATIV-0014", "TASK-AGENTE-SPECNATIV-0015", "TASK-AGENTE-SPECNATIV-0016", "TASK-AGENTE-SPECNATIV-0017", "TASK-AGENTE-SPECNATIV-0018"]
 related_decisions = ["DEC-0001"]
 artifacts     = ["pilot/", ".specnative/specnative_mcp.py"]
 validation    = ["cargo test", "specnative validate", "walkthrough de conversación"]
@@ -92,6 +92,9 @@ Excluye:
 - RF-12: `asn --version` debe mostrar la versión instalada e incluir el hash del
   commit Git del que se construyó el paquete, sin leer configuración ni iniciar
   conexiones externas.
+- RF-13: `asn --test-mcp` debe ejecutar un ciclo real de agente con una
+  herramienta MCP de solo lectura, comprobar que el agente continúa después de
+  recibir el resultado, y reportar la etapa y eval temporal si falla.
 
 ## Requisitos no funcionales
 
@@ -148,6 +151,10 @@ Excluye:
 - Dado un paquete ASN construido desde un commit Git, cuando el usuario ejecuta
   `asn --version`, entonces se muestra una versión que incluye el hash de ese
   commit antes de cargar credenciales o configuración.
+- Dado un proveedor y un servidor MCP configurados, cuando el usuario ejecuta
+  `asn --test-mcp`, entonces el agente invoca la herramienta de lectura
+  `status`, procesa su resultado y finaliza el ciclo sin disponer de tools de
+  escritura; si falla, se identifica la etapa sin imprimir prompts ni secretos.
 
 ## Dependencias y riesgos
 

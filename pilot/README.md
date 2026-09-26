@@ -39,6 +39,12 @@ hay un override de configuración. La prueba muestra un resumen sanitizado del
 endpoint y request; el token aparece parcialmente enmascarado (o totalmente
 oculto si es corto). La solicitud puede consumir cuota.
 
+Ejecuta `asn --test-mcp --repo .` para probar el ciclo del agente con el MCP
+configurado: el modelo llama a la tool de lectura `status`, ASN la ejecuta y
+el modelo debe completar una respuesta después de recibir el resultado. Esta
+prueba realiza peticiones reales al proveedor y puede consumir cuota. Sólo
+expone `status` y `final_answer`, y muestra la ruta del eval temporal.
+
 Las fallas del CLI y de `asn-agent-mcp` se registran en `asn-failures.jsonl` con
 rotación. ASN prueba `/var/log/asn`, luego la carpeta de logs del usuario
 (`~/Library/Logs/asn` en macOS o `$XDG_STATE_HOME/asn/logs`) y finalmente
