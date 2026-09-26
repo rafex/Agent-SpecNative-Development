@@ -284,3 +284,21 @@ completion_evidence = ["`XDG_CONFIG_HOME=/tmp/asn-test-config XDG_STATE_HOME=/tm
 ```
 
 Definir effort low por defecto para Groq GPT-OSS, reintentar una sola vez el error HTTP 400 exacto de tool choice requerido, y hacer que asn --test compruebe una llamada real a una herramienta.
+
+### TASK-AGENTE-SPECNATIV-0015 - Autocompletar iniciativas existentes y prevenir duplicados por typo
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0015"
+title = "Autocompletar iniciativas existentes y prevenir duplicados por typo"
+state = "done"
+priority = "p1"
+owner = "rafex"
+labels = ["cli", "usability"]
+dependencies = ["TASK-AGENTE-SPECNATIV-0006"]
+expected_files = ["pilot/src/specnative_pilot/controller.py", "pilot/pyproject.toml", "pilot/tests/test_policy.py", "pilot/src/specnative_pilot/resources/specnative-agent/help.md"]
+close_criteria = "En una terminal interactiva ASN muestra sugerencias de slugs existentes mientras se escribe; en modo no interactivo conserva el prompt; un slug a una edición de distancia requiere confirmación antes de crear una iniciativa distinta."
+validation = ["uv run --project pilot pytest -q", "uv lock --check --project pilot", "git diff --check"]
+completion_evidence = ["XDG_CONFIG_HOME=/tmp/asn-test-config XDG_STATE_HOME=/tmp/asn-test-state uv run --project pilot pytest -q: 91 passed; uv lock --check --project pilot: correcto; make docs: compilación correcta; git diff --check: correcto; MCP validate: 15 archivos y referencias válidos; MCP health_check: 8/8 documentos saludables."]
+```
+
+Completar slugs desde `spec-native/specs/` y `spec-native/tasks/`, reutilizar una coincidencia cercana al rechazar la creación y permitirla sólo tras confirmación explícita.

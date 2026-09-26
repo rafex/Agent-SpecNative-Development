@@ -60,6 +60,85 @@ def test_failed_preflight_stops_before_model_or_writes(tmp_path):
     assert "Validation failed" in output.getvalue()
 
 
+def _write_initiative(repo, base, slug, artifact):
+    folder = repo / "spec-native" / base / slug
+    folder.mkdir(parents=True)
+    (folder / artifact).write_text("", encoding="utf-8")
+
+
+def test_choose_initiative_lists_existing_specs_and_tasks_once(tmp_path):
+    _write_initiative(tmp_path, "specs", "portal-captive", "SPEC.md")
+    _write_initiative(tmp_path, "tasks", "portal-captive", "TASKS.md")
+    output = StringIO()
+    controller = Controller(config(tmp_path), input_fn=lambda _: "portal-captive", output=output)
+
+    assert controller.choose_initiative(FakeMcp("unused")) == "portal-captive"
+    assert output.getvalue().count("portal-captive") == 1
+
+
+def test_choose_initiative_reuses_similar_slug_when_new_slug_is_not_confirmed(tmp_path):
+    _write_initiative(tmp_path, "specs", "portal-captive", "SPEC.md")
+    answers = iter(["portal-captives", "n"])
+    controller = Controller(config(tmp_path), input_fn=lambda _: next(answers), output=StringIO())
+
+    assert controller.choose_initiative(FakeMcp("unused")) == "portal-captive"
+
+
+def test_choose_initiative_allows_similar_new_slug_after_confirmation(tmp_path):
+    _write_initiative(tmp_path, "specs", "portal-captive", "SPEC.md")
+    answers = iter(["portal-captives", "s"])
+    controller = Controller(config(tmp_path), input_fn=lambda _: next(answers), output=StringIO())
+
+    assert controller.choose_initiative(FakeMcp("unused")) == "portal-captives"
+
+
+def test_choose_initiative_accepts_new_slug_when_no_initiatives_exist(tmp_path):
+    controller = Controller(config(tmp_path), input_fn=lambda _: "portal-captive", output=StringIO())
+
+    assert controller.choose_initiative(FakeMcp("unused")) == "portal-captive"
+
+
+def test_choose_initiative_case_insensitive_exact_match_uses_canonical_slug(tmp_path):
+    _write_initiative(tmp_path, "specs", "portal-captive", "SPEC.md")
+    controller = Controller(config(tmp_path), input_fn=lambda _: "PORTAL-CAPTIVE", output=StringIO())
+
+    assert controller.choose_initiative(FakeMcp("unused")) == "portal-captive"
+
+
+def test_interactive_initiative_prompt_enables_live_fuzzy_completion(tmp_path, monkeypatch):
+    import sys
+
+    class TTY:
+        def isatty(self):
+            return True
+
+    monkeypatch.setattr(sys, "stdin", TTY())
+    monkeypatch.setattr(sys, "stdout", TTY())
+    calls = []
+
+    def prompt(text, **kwargs):
+        calls.append((text, kwargs))
+        return "portal-captive"
+
+    monkeypatch.setattr("prompt_toolkit.prompt", prompt)
+    controller = Controller(config(tmp_path), output=StringIO())
+
+    assert controller._initiative_prompt("Iniciativa: ", ["portal-captive"]) == "portal-captive"
+    assert calls[0][0] == "Iniciativa: "
+    assert calls[0][1]["complete_while_typing"] is True
+    assert calls[0][1]["completer"].WORD is True
+
+
+def test_one_edit_apart_covers_insert_delete_and_substitution():
+    from specnative_pilot.controller import _one_edit_apart
+
+    assert _one_edit_apart("portal-captive", "portal-captives")
+    assert _one_edit_apart("portal-captive", "portal-capive")
+    assert _one_edit_apart("portal-captive", "portal-captivf")
+    assert not _one_edit_apart("portal-captive", "portal-captive")
+    assert not _one_edit_apart("portal-captive", "unrelated")
+
+
 def test_help_uses_mdcat_when_available(tmp_path, monkeypatch):
     output = StringIO()
     calls = []

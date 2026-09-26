@@ -8,7 +8,7 @@ owner         = "rafex"
 created_at    = "2026-09-17"
 updated_at    = "2026-09-26"
 replaces      = "none"
-related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006", "TASK-AGENTE-SPECNATIV-0007", "TASK-AGENTE-SPECNATIV-0008", "TASK-AGENTE-SPECNATIV-0014"]
+related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006", "TASK-AGENTE-SPECNATIV-0007", "TASK-AGENTE-SPECNATIV-0008", "TASK-AGENTE-SPECNATIV-0014", "TASK-AGENTE-SPECNATIV-0015"]
 related_decisions = ["DEC-0001"]
 artifacts     = ["pilot/", ".specnative/specnative_mcp.py"]
 validation    = ["cargo test", "specnative validate", "walkthrough de conversación"]
@@ -83,6 +83,9 @@ Excluye:
   vez con una instrucción reforzada; un fallo persistente no escribirá archivos
   y quedará registrado. `asn --test` debe comprobar una llamada requerida a
   herramienta.
+- RF-10: Al elegir una iniciativa, el CLI debe sugerir slugs existentes durante
+  la escritura y advertir antes de continuar con un slug nuevo que difiera por
+  una sola edición de uno existente.
 
 ## Requisitos no funcionales
 
@@ -127,6 +130,9 @@ Excluye:
 - Dado que el usuario interrumpe `asn --auth` con Ctrl+C durante la captura,
   entonces ASN informa que la autenticación se canceló sin traceback ni crear
   el archivo de credenciales.
+- Dado que existe `portal-captive`, cuando el usuario escribe `portal-captives`
+  como slug nuevo, entonces ASN advierte de la coincidencia cercana y requiere
+  confirmación para continuar con un segundo slug.
 
 ## Dependencias y riesgos
 

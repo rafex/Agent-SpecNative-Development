@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
   "smolagents[mcp,openai]>=1.26,<2",
   "mcp>=1.10,<2",
+  "prompt-toolkit>=3.0,<4",
 ]
 
 [project.optional-dependencies]

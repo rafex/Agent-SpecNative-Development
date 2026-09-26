@@ -14,6 +14,12 @@ archivos.
 | `/template <nombre>` | Solicitar una plantilla por nombre; ASN muestra el alcance y pide confirmación antes de aplicarla. |
 | `/quit` o `/exit` | Cerrar la sesión. |
 
+Al iniciar, escribe el slug de una iniciativa existente para ver sugerencias y
+completarlo, o escribe uno nuevo. ASN busca slugs bajo `spec-native/specs/` y
+`spec-native/tasks/`. Si el slug nuevo difiere por una sola letra de uno
+existente, ASN lo advierte y pide confirmación antes de crear una iniciativa
+distinta.
+
 Cuando ASN tenga suficiente información, presentará una propuesta. Confirma
 sólo después de revisarla; responder sí la aplica y cualquier otra respuesta la
 rechaza sin modificar archivos. Una propuesta pendiente debe resolverse antes

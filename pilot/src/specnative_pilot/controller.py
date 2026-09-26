@@ -24,6 +24,7 @@ class Controller:
         self.config = config
         self.input = input_fn
         self.output = output or sys.stdout
+        self.use_terminal_prompt = input_fn is input
 
     def say(self, message: str = "") -> None:
         print(message, file=self.output)
@@ -58,12 +59,81 @@ class Controller:
         self.say(markdown)
 
     def choose_initiative(self, mcp: SpecNativeMcp) -> str:
-        specs = mcp.call("list_specs")
-        self.say(str(specs))
-        value = self.input("Iniciativa (slug nuevo o existente): ").strip()
+        initiatives = self._existing_initiatives()
+        prompt = "Iniciativa (slug nuevo o existente): "
+        value = self._initiative_prompt(prompt, initiatives).strip()
         if not value:
             raise RuntimeError("Debes indicar una iniciativa.")
+
+        exact = next((item for item in initiatives if item.casefold() == value.casefold()), None)
+        if exact is not None:
+            return exact
+
+        similar = self._one_edit_matches(value, initiatives)
+        if similar:
+            self.say("Iniciativa(s) existente(s) con nombre parecido: " + ", ".join(similar))
+            if not self.confirm(f"¿Crear `{value}` de todas formas? Se creará una iniciativa distinta"):
+                if len(similar) == 1:
+                    return similar[0]
+                chosen = self.input(f"Escribe el slug que quieres usar ({', '.join(similar)}): ").strip()
+                canonical = next((item for item in similar if item.casefold() == chosen.casefold()), None)
+                if canonical is None:
+                    raise RuntimeError("Debes seleccionar una de las iniciativas existentes sugeridas.")
+                return canonical
         return value
+
+    def _existing_initiatives(self) -> list[str]:
+        names: set[str] = set()
+        for directory, artifact in (
+            (self.config.repo / "spec-native" / "specs", "SPEC.md"),
+            (self.config.repo / "spec-native" / "tasks", "TASKS.md"),
+        ):
+            if not directory.is_dir():
+                continue
+            for child in directory.iterdir():
+                if child.is_dir() and (child / artifact).is_file():
+                    names.add(child.name)
+        return sorted(names, key=str.casefold)
+
+    @staticmethod
+    def _one_edit_matches(value: str, initiatives: list[str]) -> list[str]:
+        normalized = value.strip().casefold()
+        return [
+            initiative
+            for initiative in initiatives
+            if _one_edit_apart(normalized, initiative.casefold())
+        ]
+
+    def _initiative_prompt(self, prompt: str, initiatives: list[str]) -> str:
+        import sys
+
+        if (
+            not initiatives
+            or not self.use_terminal_prompt
+            or not sys.stdin.isatty()
+            or not sys.stdout.isatty()
+        ):
+            if not initiatives:
+                self.say("No hay iniciativas existentes. Puedes escribir un slug nuevo.")
+            else:
+                self.say("Iniciativas disponibles: " + ", ".join(initiatives))
+            return self.input(prompt)
+
+        try:
+            from prompt_toolkit import prompt as terminal_prompt
+            from prompt_toolkit.completion import FuzzyWordCompleter
+        except ImportError:
+            self.say("No se pudo cargar el autocompletado; puedes escribir un slug nuevo.")
+            return self.input(prompt)
+
+        completer = FuzzyWordCompleter(initiatives, WORD=True)
+        return terminal_prompt(
+            prompt,
+            completer=completer,
+            complete_while_typing=True,
+            reserve_space_for_menu=min(6, len(initiatives)),
+        )
+
 
     def handle_template(self, mcp: SpecNativeMcp, initiative: str, name: str | None) -> None:
         listing = str(mcp.call("list_templates", template_type="spec"))
@@ -172,3 +242,31 @@ class Controller:
                 else:
                     self.say(session.reject(token)["text"])
         return 0
+
+
+def _one_edit_apart(left: str, right: str) -> bool:
+    """Return whether two strings differ by one insertion/deletion/substitution."""
+    if left == right:
+        return False
+    if abs(len(left) - len(right)) > 1:
+        return False
+
+    i = j = edits = 0
+    while i < len(left) and j < len(right):
+        if left[i] == right[j]:
+            i += 1
+            j += 1
+            continue
+        edits += 1
+        if edits > 1:
+            return False
+        if len(left) > len(right):
+            i += 1
+        elif len(right) > len(left):
+            j += 1
+        else:
+            i += 1
+            j += 1
+    if i < len(left) or j < len(right):
+        edits += 1
+    return edits == 1
