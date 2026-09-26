@@ -1,13 +1,13 @@
 # Project-scoped SpecNative MCP configuration for Codex.
-# Absolute paths keep the local server independent of the launch directory.
+# `asn-mcp` is installed on PATH, so this works on macOS and Linux.
 
 [mcp_servers.specnative]
-command = "/Users/rafex/repository/github/rafex/Agent-SpecNative-Development/.specnative/.venv/bin/python3"
-args = [
-  "/Users/rafex/repository/github/rafex/Agent-SpecNative-Development/.specnative/specnative_mcp.py",
-  "--repo",
-  "/Users/rafex/repository/github/rafex/Agent-SpecNative-Development"
-]
-cwd = "/Users/rafex/repository/github/rafex/Agent-SpecNative-Development"
+command = "asn-mcp"
+args = ["--repo", "."]
+cwd = "."
 enabled = true
 startup_timeout_sec = 30
+tool_timeout_sec = 120
+
+[mcp_servers.specnative.tools.resume]
+approval_mode = "approve"
