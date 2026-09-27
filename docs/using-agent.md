@@ -62,8 +62,17 @@ otros endpoints GPT-OSS usa tool calling nativo hasta confirmar soporte de
 Structured Outputs. Todas las rutas limitan la ejecución al catálogo local y
 no ejecutan herramientas en paralelo.
 
-Para Groq, ASN envía `include_reasoning=false` y usa `service_tier=auto` por
-defecto; `[agent].service_tier` permite seleccionar `auto`, `on_demand`,
+Groq [documenta tool use en todos sus modelos alojados](https://console.groq.com/docs/tool-use/overview).
+Configura cualquier ID de chat del catálogo con `asn --auth` o
+`SPECNATIVE_AGENT_MODEL`; `asn models` consulta los IDs actuales, y `asn --test`
+verifica que el modelo escogido devuelva el tool call requerido. El listado del
+endpoint puede contener modelos de modalidades que no sirven como modelo
+conversacional.
+
+ASN usa tool calling nativo para los modelos Groq distintos de GPT-OSS. Sólo
+GPT-OSS en Groq recibe `include_reasoning=false` y el flujo JSON estructurado
+con despacho local; `service_tier=auto` se envía por defecto para todos los
+modelos Groq. `[agent].service_tier` permite seleccionar `auto`, `on_demand`,
 `flex` o `performance`. Las instrucciones y el catálogo de herramientas
 permanecen en el prefijo estable del prompt y el mensaje/contexto variable va
 al final para aprovechar el prompt caching automático. SQLite registra tokens

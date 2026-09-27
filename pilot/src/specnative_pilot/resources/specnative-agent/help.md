@@ -67,9 +67,10 @@ GPT-OSS se detecta por el nombre del modelo, sin importar el proveedor. Groq
 GPT-OSS usa una acción JSON estricta y despacho local porque Groq no permite
 combinar Structured Outputs estrictos y tools nativas en una petición. Otros
 endpoints GPT-OSS siguen usando tool calling nativo. En Groq ASN manda
-`include_reasoning=false` y `service_tier=auto` por defecto; las opciones válidas
-se configuran en `[agent].service_tier`. SQLite registra tokens cacheados si el
-proveedor los devuelve. `asn --test` comprueba tool calling antes de iniciar.
+`include_reasoning=false` sólo para GPT-OSS y `service_tier=auto` para cualquier
+modelo Groq; las opciones válidas se configuran en `[agent].service_tier`.
+SQLite registra tokens cacheados si el proveedor los devuelve. `asn --test`
+comprueba tool calling antes de iniciar.
 
 `asn --test-mcp --repo .` valida también el ciclo completo con el servidor
 MCP configurado. Registra el catálogo real de 20 tools MCP de solo lectura,

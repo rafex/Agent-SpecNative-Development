@@ -279,13 +279,16 @@ def _unsupported_parameter(error: BaseException, parameter: str) -> bool:
     return False
 
 
-def _is_groq_gpt_oss(model_id: str | None, api_base: str | None) -> bool:
-    model_name = (model_id or "").casefold()
+def _is_groq(api_base: str | None) -> bool:
     try:
         hostname = (urlsplit(api_base or "").hostname or "").casefold()
     except ValueError:
-        hostname = ""
-    return hostname == "api.groq.com" and _is_gpt_oss(model_name)
+        return False
+    return hostname == "api.groq.com"
+
+
+def _is_groq_gpt_oss(model_id: str | None, api_base: str | None) -> bool:
+    return _is_groq(api_base) and _is_gpt_oss(model_id)
 
 
 def _is_gpt_oss(model_id: str | None) -> bool:
@@ -623,22 +626,24 @@ def build_model(config: Config) -> OpenAIServerModel:
     model_options = {"reasoning_effort": reasoning_effort} if reasoning_effort else {}
     if _is_gpt_oss(credentials.model):
         model_options.setdefault("tool_choice", "auto")
-    if _is_groq_gpt_oss(credentials.model, credentials.api_base):
-        # GPT-OSS can otherwise be forced to call a tool even when it has
-        # completed the task. On Groq this may surface as an invalid `json`
-        # pseudo-tool call; auto still allows requested MCP tool calls and
-        # lets the agent finish with a normal assistant response.
-        # Groq includes the private reasoning channel by default. In practice
-        # that can arrive as reasoning-only completions with empty content and
-        # no tool call. Exclude it at the API boundary so smolagents receives
-        # the user-facing completion/tool channel. Groq can also misclassify
-        # GPT-OSS's final `json` answer as an unregistered tool before ASN can
-        # normalize it to `final_answer`; disable that server-side name check
-        # and let parse_tool_calls accept only the supported final-answer shape.
-        model_options["extra_body"] = {
-            "include_reasoning": False,
-            "service_tier": config.service_tier or "auto",
-        }
+    if _is_groq(credentials.api_base):
+        # Groq's chat endpoint accepts service_tier across its hosted model
+        # catalog. Keep the reasoning workaround specific to GPT-OSS.
+        extra_body = {"service_tier": config.service_tier or "auto"}
+        if _is_groq_gpt_oss(credentials.model, credentials.api_base):
+            extra_body["include_reasoning"] = False
+            # GPT-OSS can otherwise be forced to call a tool even when it has
+            # completed the task. On Groq this may surface as an invalid `json`
+            # pseudo-tool call; auto still allows requested MCP tool calls and
+            # lets the agent finish with a normal assistant response.
+            # Groq includes the private reasoning channel by default. In practice
+            # that can arrive as reasoning-only completions with empty content and
+            # no tool call. Exclude it at the API boundary so smolagents receives
+            # the user-facing completion/tool channel. Groq can also misclassify
+            # GPT-OSS's final `json` answer as an unregistered tool before ASN can
+            # normalize it to `final_answer`; disable that server-side name check
+            # and let parse_tool_calls accept only the supported final-answer shape.
+        model_options["extra_body"] = extra_body
     from .history import HistoryStore
 
     call_history = HistoryStore(

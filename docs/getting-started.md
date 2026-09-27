@@ -49,13 +49,20 @@ se conserva sólo en memoria. Si no quieres usar SOPS, puedes exportar
 `SPECNATIVE_AGENT_MODEL` y `OPENAI_API_KEY`; usa
 `SPECNATIVE_AGENT_API_BASE` para un endpoint alternativo.
 
+Para Groq, configura como modelo cualquier ID de chat disponible en el
+catálogo que admita tool calling. `asn models` consulta el catálogo autenticado;
+elige el ID exacto y configúralo con `asn --auth` o `SPECNATIVE_AGENT_MODEL`.
+`asn models` informa disponibilidad del ID, pero la llamada a `asn --test`
+confirma que ese modelo acepte tool calling requerido.
+
 El esfuerzo de razonamiento se configura en `[agent].reasoning_effort` de
 `.specnative/agent.toml` o con `SPECNATIVE_AGENT_REASONING_EFFORT`; el valor de
 entorno tiene prioridad. ASN pasa el mismo valor al agente y a `asn --test`.
 Para GPT-OSS, ASN usa `low` si no hay override, sin depender del proveedor; los
-demás modelos conservan su valor predeterminado. En Groq, el agente pide una
-acción JSON estricta y despacha la herramienta localmente, porque Groq no
-permite combinar Structured Outputs estrictos con tools nativas en una llamada.
+demás modelos conservan su valor predeterminado. Los demás modelos de Groq usan
+tool calling nativo. Sólo GPT-OSS en Groq usa una acción JSON estricta y despacho
+local, porque esa combinación evita mezclar Structured Outputs estrictos con
+tools nativas en una llamada.
 
 Las credenciales del proyecto tienen prioridad sobre las globales y las
 variables de entorno. Para usar gopass, inicializa las referencias y sigue las

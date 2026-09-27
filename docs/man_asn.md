@@ -22,7 +22,7 @@ export SPECNATIVE_AGENT_REASONING_EFFORT="low"
 export SPECNATIVE_AGENT_EMBEDDING_MODEL="nomic-embed-text-v1.5"
 export SPECNATIVE_AGENT_EMBEDDING_API_BASE="https://api.example.test/v1"
 export SPECNATIVE_AGENT_EMBEDDING_API_KEY_ENV="EMBEDDINGS_API_KEY"
-# Opcional para Groq GPT-OSS
+# Opcional para cualquier modelo de chat Groq
 export SPECNATIVE_AGENT_SERVICE_TIER="auto"
 ```
 
@@ -150,6 +150,11 @@ Para consultar el catálogo que expone el proveedor:
 asn models
 asn models --repo /ruta/al/proyecto
 ```
+
+Para cambiar de modelo, copia el ID que quieras usar del catálogo y configúralo
+con `asn --auth` o `SPECNATIVE_AGENT_MODEL`. ASN no mantiene una lista fija de
+IDs. El catálogo puede incluir modelos no conversacionales; `asn --test`
+comprueba que el ID seleccionado responda a una llamada requerida a herramienta.
 
 ASN envía un `GET` autenticado a `/models` usando el mismo endpoint y
 credenciales configurados para el agente. Con Groq consulta

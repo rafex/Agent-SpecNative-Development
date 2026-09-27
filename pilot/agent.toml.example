@@ -15,7 +15,7 @@ max_steps = 12
 # GPT-OSS defaults to low for every provider when this setting is unset.
 # SPECNATIVE_AGENT_REASONING_EFFORT overrides this value when set.
 reasoning_effort = ""
-# Groq GPT-OSS service tier: auto (default), on_demand, flex, performance.
+# Groq service tier for any chat model: auto (default), on_demand, flex, performance.
 # service_tier = "auto"
 
 [mcp]

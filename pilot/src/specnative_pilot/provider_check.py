@@ -76,6 +76,13 @@ def _models_url(api_base: str | None) -> str:
     return urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
 
 
+def _is_groq_endpoint(api_base: str | None) -> bool:
+    try:
+        return (urlsplit(api_base or "").hostname or "").casefold() == "api.groq.com"
+    except ValueError:
+        return False
+
+
 def _display_url(url: str) -> str:
     """Hide URL credentials, query values, and fragments in diagnostic output."""
     parts = urlsplit(url)
@@ -144,12 +151,10 @@ def _prepare_request(credentials: ResolvedCredentials, reasoning_effort: str | N
     }
     if reasoning_effort:
         payload["reasoning_effort"] = reasoning_effort
-    try:
-        groq_endpoint = (urlsplit(credentials.api_base or "").hostname or "").casefold() == "api.groq.com"
-    except ValueError:
-        groq_endpoint = False
-    if groq_endpoint and credentials.model.casefold().startswith("openai/gpt-oss-"):
-        payload["include_reasoning"] = False
+    if _is_groq_endpoint(credentials.api_base):
+        payload["service_tier"] = "auto"
+        if "gpt-oss" in credentials.model.casefold():
+            payload["include_reasoning"] = False
     url = _chat_completions_url(credentials.api_base)
     body = json.dumps(payload, ensure_ascii=False, indent=2)
     curl_config = "\n".join(

@@ -523,3 +523,23 @@ completion_evidence = ["`make check VENV=pilot/.venv PYTHON=pilot/.venv/bin/pyth
 ```
 
 Implementar estrategia GPT-OSS independiente del proveedor, usando JSON Schema estricto y despacho local en endpoints con soporte confirmado (sin combinar schema y tools en Groq) y tools nativas en otros endpoints; configurar opciones Groq reasoning/service tier/cache métricas; separar configuración y diagnóstico de embeddings y añadir reindexado vectorial en segundo plano con SQLite que preserve historial y el índice anterior ante fallos.
+
+### TASK-AGENTE-SPECNATIV-0027 - Aplicar soporte general de Groq al catálogo de modelos de ASN
+
+> **Update 2026-09-27T15:30:23Z:** Implementando compatibilidad general con modelos Groq del catálogo; los protocolos especiales siguen acotados a GPT-OSS.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0027"
+title = "Aplicar soporte general de Groq al catálogo de modelos de ASN"
+state = "done"
+priority = "p1"
+owner = "dev"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "Cualquier ID de modelo de chat Groq compatible con tool calling puede configurarse y usarse por la ruta OpenAI-compatible de ASN; las opciones generales de service tier aplican a Groq y las adaptaciones de razonamiento/JSON de GPT-OSS no se filtran a otros modelos. La guía explica que `asn models` muestra catálogo y el modelo se elige configurando el ID."
+validation = ["Pruebas unitarias demuestran que un modelo Groq no GPT-OSS conserva tool calling nativo, recibe service_tier configurado/default y no recibe include_reasoning ni reasoning_effort por defecto.", "Prueba/documentación cubren la selección de un ID arbitrario del catálogo sin allowlist de GPT-OSS.", "Ejecutar suite de pruebas, build docs y git diff --check."]
+completion_evidence = ["`pilot/.venv/bin/python -m compileall -q pilot/src`, `make docs` y `git diff --check` correctos. La ruta de construcción transmite service_tier a todo modelo del endpoint api.groq.com; include_reasoning=false y el protocolo JSON estructurado continúan limitados a GPT-OSS. Se documentó consultar IDs con asn models, configurarlos con asn --auth/SPECNATIVE_AGENT_MODEL y validarlos con asn --test. No se hizo una llamada real a Groq."]
+```
+
+Permitir usar cualquier modelo de chat de Groq compatible con tool calling, aplicar opciones del proveedor a todos los modelos Groq cuando correspondan y mantener únicamente las adaptaciones de protocolo/reasoning limitadas a GPT-OSS. Aclarar la selección de IDs mediante `asn models` y configuración.
