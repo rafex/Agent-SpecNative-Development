@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from secrets import token_urlsafe
+from threading import Lock
 from typing import Any, Callable
 from uuid import uuid4
 
@@ -16,6 +17,20 @@ from .model import build_model
 from .models import Proposal
 from .secrets import SecretResolutionError, credential_setup_message, missing_credential_names, resolve_credentials
 from .templates import spec_template_names
+
+
+_memory_warning_lock = Lock()
+_memory_warning_reported = False
+
+
+def _claim_memory_warning() -> bool:
+    """Allow one memory degradation notice per ASN process."""
+    global _memory_warning_reported
+    with _memory_warning_lock:
+        if _memory_warning_reported:
+            return False
+        _memory_warning_reported = True
+        return True
 
 
 class SessionError(RuntimeError):
@@ -67,7 +82,6 @@ class AgentSession:
         self.owns_mcp = owns_mcp
         self.pending: PendingAction | None = None
         self.closed = False
-        self._memory_warning_reported = False
 
     @classmethod
     def from_mcp(
@@ -247,9 +261,12 @@ class AgentSession:
             initiative=self.initiative,
             session_id=self.session_id,
         )
-        warning = self.history.vector_error if not self._memory_warning_reported else None
+        warning = (
+            self.history.vector_error
+            if self.history.vector_error and _claim_memory_warning()
+            else None
+        )
         if warning:
-            self._memory_warning_reported = True
             extra["memory_warning"] = warning
         return self._result(status, text, **extra)
 

@@ -189,7 +189,8 @@ export SPECNATIVE_AGENT_HISTORY=false
 El modelo de ejemplo debe estar publicado por el endpoint seleccionado. Que un
 proveedor ofrezca chat no implica que exponga embeddings; confirma la capacidad
 con `asn --test-embeddings`. La búsqueda vectorial es opcional y la persistencia
-SQL no depende de ella.
+SQL no depende de ella. Si el perfil no ofrece embeddings, ASN muestra el aviso
+de degradación una vez por proceso; el historial continúa guardándose en SQLite.
 
 ## Comandos de historial
 

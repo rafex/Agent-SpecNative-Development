@@ -563,3 +563,22 @@ completion_evidence = ["`python3 -m compileall -q pilot/src`, `make docs` y `git
 ```
 
 Permitir seleccionar modelo y API base mediante configuración global o del repositorio sin volver a autenticar. Guardar el modelo y endpoint en agent.toml y cifrar sólo la API key con SOPS; priorizar env y TOML sobre metadatos legacy cifrados para mantener compatibilidad.
+
+### TASK-AGENTE-SPECNATIV-0029 - Emitir una sola alerta de embeddings por ejecución del agente
+
+> **Update 2026-09-27T17:35:35Z:** Implementación aplicada en pilot/src/specnative_pilot/session.py: el aviso usa una guarda atómica de módulo y se emite una sola vez por proceso aunque existan varias sesiones. docs/history-and-sqlite.md aclara la degradación. No se ejecutaron pruebas; queda pendiente validar el caso de dos sesiones.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0029"
+title = "Emitir una sola alerta de embeddings por ejecución del agente"
+state = "in_progress"
+priority = "p2"
+owner = "dev"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "El aviso de embeddings no disponibles se devuelve como máximo una vez por proceso ASN incluso si se crean varias sesiones; las sesiones posteriores siguen operando y conservan historial SQL."
+validation = ["Añadir prueba con dos AgentSession independientes en un mismo proceso: sólo la primera respuesta incluye memory_warning.", "Ejecutar las pruebas existentes de sesión e historial; confirmar que el historial persiste si la búsqueda vectorial está desactivada."]
+```
+
+La búsqueda semántica queda opcional cuando el proveedor configurado carece de endpoint/modelo de embeddings. Emitir el aviso de degradación una sola vez durante el proceso, aunque se inicien varias sesiones ASN, y conservar el historial SQLite sin mensajes repetitivos.
