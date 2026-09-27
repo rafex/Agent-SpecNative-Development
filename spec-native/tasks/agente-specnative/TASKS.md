@@ -434,7 +434,7 @@ Generalizar los reintentos de respuestas vacías a proveedores OpenAI compatible
 ```toml
 id = "TASK-AGENTE-SPECNATIV-0022"
 title = "Endurecer GPT-OSS en Groq y documentar persistencia SQLite"
-state = "in_progress"
+state = "done"
 priority = "p1"
 owner = "rafex"
 labels = []
@@ -442,6 +442,7 @@ dependencies = []
 expected_files = []
 close_criteria = "La petición real de inicio del portal devuelve una respuesta utilizable o una pregunta segura sin agotar reintentos; asn --test y asn --test-mcp completan con la instalación local; la documentación MkDocs explica qué persiste en SQLite y qué queda en eval temporal, incluye diagramas Mermaid y D2; el cambio está publicado en Git."
 validation = ["Ejecutar asn --version, asn --test y asn --test-mcp contra la configuración local sin mostrar la credencial.", "Reproducir el prompt adjunto a través de AgentSession y comprobar respuesta utilizable sin modificar archivos del repositorio portal-captive.", "Construir el sitio MkDocs y revisar git diff --check."]
+completion_evidence = ["Publicación `b74ef023f` en main e instalación local `asn 0.2.1.dev17+gb74ef023f`. Tras instalar: `asn --test --repo /home/rafex/repository/rafex/portal-captive` validó HTTP 200 y la tool call `asn_tool_call_probe`; `asn --test-mcp` ejecutó `status` y continuó tras el resultado MCP (4 requests). Un turno AgentSession con la petición del portal devolvió una pregunta breve sobre usar identidad ficticia, en una llamada, sin proponer ni escribir specs. `asn setup --clients all` confirmó Codex/Claude/OpenCode actualizados. `make docs`, compileall, `git diff --check` y compilación D2 pasaron; el SVG existente coincide con regeneración. SpecNative validate pasó con los 15 archivos requeridos."]
 ```
 
 Completar la integración estructurada de tool calling y continuación para Groq GPT-OSS, instalar esta revisión en la máquina local, configurar ASN para uso y ampliar la documentación MkDocs sobre memoria e historial SQLite/sqlite-vec con diagramas Mermaid y D2.
