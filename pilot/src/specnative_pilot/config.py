@@ -4,7 +4,6 @@ import os
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from .mcp_discovery import find_local_mcp
 from .secrets import DEFAULT_GOPASS_FILE, DEFAULT_SOPS_FILE, SECRET_BACKENDS
@@ -26,6 +25,9 @@ class Config:
     secrets_file: Path | None = None
     gopass_file: Path | None = None
     embedding_model: str | None = None
+    embedding_api_base: str | None = None
+    embedding_api_key_env: str | None = None
+    service_tier: str | None = None
 
 
 def effective_reasoning_effort(
@@ -34,16 +36,11 @@ def effective_reasoning_effort(
     model: str | None = None,
     api_base: str | None = None,
 ) -> str | None:
-    """Resolve the configured effort, with a focused default for Groq GPT-OSS."""
+    """Resolve the configured effort, with a default for the GPT-OSS family."""
     if config.reasoning_effort:
         return config.reasoning_effort
     model_id = (model or config.model).strip().casefold()
-    endpoint = (api_base if api_base is not None else config.api_base) or ""
-    try:
-        hostname = (urlsplit(endpoint).hostname or "").casefold()
-    except ValueError:
-        hostname = ""
-    if hostname == "api.groq.com" and model_id.startswith("openai/gpt-oss-"):
+    if model_id.startswith("openai/gpt-oss-") or model_id.startswith("gpt-oss-"):
         return "low"
     return None
 
@@ -106,6 +103,19 @@ def load_config(
         raise ValueError("[agent].embedding_model debe ser texto")
     if embedding_model is not None:
         embedding_model = embedding_model.strip() or None
+    embedding_api_base = os.getenv("SPECNATIVE_AGENT_EMBEDDING_API_BASE") or agent.get("embedding_api_base") or None
+    if embedding_api_base is not None and not isinstance(embedding_api_base, str):
+        raise ValueError("[agent].embedding_api_base debe ser texto")
+    embedding_api_key_env = os.getenv("SPECNATIVE_AGENT_EMBEDDING_API_KEY_ENV") or agent.get("embedding_api_key_env") or None
+    if embedding_api_key_env is not None and not isinstance(embedding_api_key_env, str):
+        raise ValueError("[agent].embedding_api_key_env debe ser texto")
+    service_tier = os.getenv("SPECNATIVE_AGENT_SERVICE_TIER") or agent.get("service_tier") or None
+    if service_tier is not None:
+        if not isinstance(service_tier, str):
+            raise ValueError("[agent].service_tier debe ser texto")
+        service_tier = service_tier.strip().lower() or None
+        if service_tier not in {None, "auto", "on_demand", "flex", "performance"}:
+            raise ValueError("[agent].service_tier debe ser auto, on_demand, flex o performance")
     return Config(
         repo=repo,
         model=os.getenv("SPECNATIVE_AGENT_MODEL", agent.get("model", "")),
@@ -121,4 +131,7 @@ def load_config(
         secrets_file=resolved_secrets_file,
         gopass_file=resolved_gopass_file,
         embedding_model=embedding_model,
+        embedding_api_base=embedding_api_base.strip() if embedding_api_base else None,
+        embedding_api_key_env=embedding_api_key_env.strip() if embedding_api_key_env else None,
+        service_tier=service_tier,
     )

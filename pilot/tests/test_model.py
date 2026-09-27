@@ -82,7 +82,7 @@ def test_build_model_defaults_groq_gpt_oss_to_low(monkeypatch):
     assert captured["tool_choice"] == "auto"
     assert captured["extra_body"] == {
         "include_reasoning": False,
-        "disable_tool_validation": True,
+        "service_tier": "auto",
     }
 
 
@@ -112,6 +112,45 @@ def test_groq_gpt_oss_normalizes_direct_text_to_final_answer():
 
     assert result.tool_calls[0].function.name == "final_answer"
     assert result.tool_calls[0].function.arguments == {"answer": "The MCP call succeeded."}
+
+
+def test_groq_gpt_oss_uses_strict_json_action_without_native_tools(monkeypatch):
+    instance = _groq_model_instance()
+    del instance._generate_provider
+    requests = []
+    response = SimpleNamespace(
+        choices=[SimpleNamespace(
+            message=SimpleNamespace(role="assistant", content='{"tool_name":"status","arguments":"{}"}', tool_calls=None),
+            finish_reason="stop",
+        )],
+        usage=SimpleNamespace(prompt_tokens=3, completion_tokens=2),
+    )
+
+    def prepare(**kwargs):
+        return {"tools": [{"type": "function"}], "messages": kwargs["messages"], "model": "openai/gpt-oss-120b"}
+
+    class Completions:
+        def create(self, **kwargs):
+            requests.append(kwargs)
+            return response
+
+    instance._prepare_completion_kwargs = prepare
+    instance.client = SimpleNamespace(chat=SimpleNamespace(completions=Completions()))
+    instance.retryer = lambda fn, **kwargs: fn(**kwargs)
+    instance._apply_rate_limit = lambda: None
+    instance.flatten_messages_as_text = True
+
+    result = instance._generate_provider(
+        [ChatMessage(role=MessageRole.USER, content="get status")],
+        tools_to_call_from=[SimpleNamespace(name="status")],
+    )
+
+    assert result.tool_calls[0].function.name == "status"
+    assert result.tool_calls[0].function.arguments == {}
+    assert "tools" not in requests[0]
+    schema = requests[0]["response_format"]["json_schema"]
+    assert schema["strict"] is True
+    assert schema["schema"]["properties"]["tool_name"]["enum"] == ["status", "final_answer"]
 
 
 def test_groq_gpt_oss_normalizes_json_pseudo_tool_only_for_final_answer_shape():
@@ -163,9 +202,12 @@ def _groq_model_instance():
     instance.model_id = "openai/gpt-oss-120b"
     instance.client_kwargs = {"base_url": "https://api.groq.com/openai/v1"}
     instance.kwargs = {}
+    instance.flatten_messages_as_text = True
+    instance.custom_role_conversions = {}
     instance.tool_name_key = "name"
     instance.tool_arguments_key = "arguments"
     instance.eval_log = _RequestCounter()
+    instance._generate_provider = lambda messages, **kwargs: model._OpenAIServerModel.generate(instance, messages, **kwargs)
     return instance
 
 

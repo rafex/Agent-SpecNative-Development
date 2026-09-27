@@ -18,8 +18,12 @@ export SPECNATIVE_AGENT_MODEL="nombre-del-modelo"
 export OPENAI_API_KEY="..."
 # Opcional; usa los valores admitidos por el proveedor, por ejemplo low
 export SPECNATIVE_AGENT_REASONING_EFFORT="low"
-# Opcional; debe existir en el endpoint configurado
-export SPECNATIVE_AGENT_EMBEDDING_MODEL="text-embedding-3-small"
+# Perfil opcional e independiente de embeddings
+export SPECNATIVE_AGENT_EMBEDDING_MODEL="nomic-embed-text-v1.5"
+export SPECNATIVE_AGENT_EMBEDDING_API_BASE="https://api.example.test/v1"
+export SPECNATIVE_AGENT_EMBEDDING_API_KEY_ENV="EMBEDDINGS_API_KEY"
+# Opcional para Groq GPT-OSS
+export SPECNATIVE_AGENT_SERVICE_TIER="auto"
 ```
 
 Al iniciar, `asn` comprueba que el modelo y la API key estén disponibles. Si
@@ -29,13 +33,20 @@ sistema y recomienda `asn --auth`.
 El esfuerzo de razonamiento puede configurarse en `[agent].reasoning_effort` de
 `.specnative/agent.toml` o con `SPECNATIVE_AGENT_REASONING_EFFORT`; la variable
 de entorno tiene prioridad. ASN pasa el valor configurado tanto al agente como
-a `asn --test`. Para Groq GPT-OSS, si no se define ASN usa `low`; los demás
-modelos conservan el valor predeterminado del proveedor.
+a `asn --test`. Para GPT-OSS, en cualquier proveedor, si no se define ASN usa
+`low`; los demás modelos conservan el valor predeterminado del proveedor. En
+Groq, ASN usa Structured Outputs estrictos para seleccionar una acción y
+despacha la herramienta localmente, porque Groq no permite combinar ese modo
+con tools nativas en una solicitud.
 
 La memoria local está activa por defecto. `embedding_model` configura el modelo
-que produce vectores usando la URL y API key del proveedor de chat. Si ese
-endpoint no ofrece embeddings, la sesión sigue con historial sin búsqueda
-semántica. Para desactivar toda persistencia, configura
+que produce vectores. `embedding_api_base` y `embedding_api_key_env` permiten
+usar endpoint y clave independientes; si se omiten, se reutilizan los valores
+del chat. Ejecuta `asn --test-embeddings` para validar la integración sin
+imprimir la clave ni el vector. ASN registra la huella validada y sólo habilita
+ese perfil. Al cambiarlo, vuelve a ejecutar la prueba; conserva el índice previo
+y construye uno nuevo en segundo plano, y sólo activa el nuevo al terminar.
+Para desactivar toda persistencia, configura
 `SPECNATIVE_AGENT_HISTORY=false`.
 
 La guía [Memoria e historial en SQLite](history-and-sqlite.md) documenta el
@@ -105,6 +116,7 @@ Antes de iniciar una sesión puedes comprobar la URL, el modelo y el token con:
 
 ```bash
 asn --test
+asn --test-embeddings
 asn --test --repo /ruta/al/proyecto
 ```
 

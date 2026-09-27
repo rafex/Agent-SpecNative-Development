@@ -52,8 +52,10 @@ se conserva sólo en memoria. Si no quieres usar SOPS, puedes exportar
 El esfuerzo de razonamiento se configura en `[agent].reasoning_effort` de
 `.specnative/agent.toml` o con `SPECNATIVE_AGENT_REASONING_EFFORT`; el valor de
 entorno tiene prioridad. ASN pasa el mismo valor al agente y a `asn --test`.
-Para Groq GPT-OSS, ASN usa `low` si no hay override; otros proveedores conservan
-su valor predeterminado.
+Para GPT-OSS, ASN usa `low` si no hay override, sin depender del proveedor; los
+demás modelos conservan su valor predeterminado. En Groq, el agente pide una
+acción JSON estricta y despacha la herramienta localmente, porque Groq no
+permite combinar Structured Outputs estrictos con tools nativas en una llamada.
 
 Las credenciales del proyecto tienen prioridad sobre las globales y las
 variables de entorno. Para usar gopass, inicializa las referencias y sigue las

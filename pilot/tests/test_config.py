@@ -75,7 +75,7 @@ def test_reasoning_effort_defaults_to_provider_when_unset(tmp_path, monkeypatch)
     assert load_config(tmp_path).reasoning_effort is None
 
 
-def test_effective_reasoning_effort_defaults_low_only_for_groq_gpt_oss(tmp_path, monkeypatch):
+def test_effective_reasoning_effort_defaults_low_for_gpt_oss_across_providers(tmp_path, monkeypatch):
     monkeypatch.delenv("SPECNATIVE_AGENT_REASONING_EFFORT", raising=False)
     config = load_config(tmp_path)
 
@@ -88,7 +88,7 @@ def test_effective_reasoning_effort_defaults_low_only_for_groq_gpt_oss(tmp_path,
         config,
         model="openai/gpt-oss-120b",
         api_base="https://api.openai.com/v1",
-    ) is None
+    ) == "low"
     assert effective_reasoning_effort(
         config,
         model="other-model",
@@ -129,3 +129,33 @@ def test_embedding_model_config_uses_environment_precedence(tmp_path, monkeypatc
     assert load_config(tmp_path, config_file).embedding_model == "provider-embed"
     monkeypatch.setenv("SPECNATIVE_AGENT_EMBEDDING_MODEL", "env-embed")
     assert load_config(tmp_path, config_file).embedding_model == "env-embed"
+
+
+def test_embedding_endpoint_and_service_tier_load_from_config_and_environment(tmp_path, monkeypatch):
+    config_file = tmp_path / "agent.toml"
+    config_file.write_text(
+        '[agent]\nembedding_api_base = "https://embed.example/v1"\nembedding_api_key_env = "EMBED_KEY"\nservice_tier = "flex"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("SPECNATIVE_AGENT_EMBEDDING_API_BASE", raising=False)
+    monkeypatch.delenv("SPECNATIVE_AGENT_EMBEDDING_API_KEY_ENV", raising=False)
+    monkeypatch.delenv("SPECNATIVE_AGENT_SERVICE_TIER", raising=False)
+    loaded = load_config(tmp_path, config_file)
+    assert loaded.embedding_api_base == "https://embed.example/v1"
+    assert loaded.embedding_api_key_env == "EMBED_KEY"
+    assert loaded.service_tier == "flex"
+
+    monkeypatch.setenv("SPECNATIVE_AGENT_SERVICE_TIER", "performance")
+    assert load_config(tmp_path, config_file).service_tier == "performance"
+
+
+def test_service_tier_rejects_unknown_values(tmp_path, monkeypatch):
+    config_file = tmp_path / "agent.toml"
+    config_file.write_text('[agent]\nservice_tier = "unknown"\n', encoding="utf-8")
+    monkeypatch.delenv("SPECNATIVE_AGENT_SERVICE_TIER", raising=False)
+    try:
+        load_config(tmp_path, config_file)
+    except ValueError as error:
+        assert "service_tier" in str(error)
+    else:
+        raise AssertionError("unknown service tiers must be rejected")

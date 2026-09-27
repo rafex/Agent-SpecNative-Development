@@ -52,17 +52,25 @@ de 1024 tokens y duplica el límite sólo con `finish_reason=length`, hasta
 sesión abierta. `/retry` repite el turno con su límite normal; `/edit` permite
 cambiar el mensaje y `/skip` lo descarta. Hasta resolverlo, ASN rechaza mensajes
 nuevos para preservar el orden de la conversación.
-Para Groq GPT-OSS, ASN envía `include_reasoning=false` en las solicitudes para
-que las respuestas traigan el contenido utilizable o la llamada a herramienta,
-en lugar del canal `reasoning` interno. En los turnos siguientes reconstruye
-las llamadas y observaciones MCP como mensajes OpenAI `assistant.tool_calls` y
-`tool` con sus IDs; smolagents conserva su formato interno de memoria. ASN
-normaliza la pseudo-herramienta `json` sólo cuando trae exactamente un campo
-`answer` de texto, tratándola como `final_answer`. Nunca usa el campo
-`reasoning` como respuesta ni ejecuta una herramienta fuera del catálogo local.
-Para este modelo, ASN también usa un prompt de herramientas compacto y envía un
-resumen del estado en vez del volcado de todas las plantillas SpecNative; el
-contexto detallado sigue disponible mediante las herramientas MCP de lectura.
+GPT-OSS se detecta por la familia del modelo, no por el proveedor. ASN reduce
+por defecto `reasoning_effort` a `low` y conserva el historial entre llamadas.
+En Groq, donde strict Structured Outputs y native tool calling no se pueden
+combinar en una solicitud, ASN pide un sobre JSON estricto que nombra una
+herramienta permitida y contiene sus argumentos JSON; después smolagents
+despacha localmente esa herramienta. No se envía `tools` junto al schema. En
+otros endpoints GPT-OSS usa tool calling nativo hasta confirmar soporte de
+Structured Outputs. Todas las rutas limitan la ejecución al catálogo local y
+no ejecutan herramientas en paralelo.
+
+Para Groq, ASN envía `include_reasoning=false` y usa `service_tier=auto` por
+defecto; `[agent].service_tier` permite seleccionar `auto`, `on_demand`,
+`flex` o `performance`. Las instrucciones y el catálogo de herramientas
+permanecen en el prefijo estable del prompt y el mensaje/contexto variable va
+al final para aprovechar el prompt caching automático. SQLite registra tokens
+de entrada/salida y tokens de prompt cacheados cuando el proveedor los informa.
+Consulta la documentación de [Structured Outputs](https://console.groq.com/docs/structured-outputs),
+[Prompt Caching](https://console.groq.com/docs/prompt-caching), [Tool Use](https://console.groq.com/docs/tool-use/overview)
+y [Service Tiers](https://console.groq.com/docs/service-tiers).
 
 Cada sesión escribe un eval JSONL bajo una carpeta privada del directorio
 temporal del sistema. La CLI muestra la ruta al iniciar; `agent_session_start`
@@ -90,12 +98,18 @@ asn history clear --repo .
 El borrado pide confirmación; `--yes` lo hace no interactivo. Puedes desactivar
 la persistencia con `SPECNATIVE_AGENT_HISTORY=false`.
 
-La búsqueda semántica usa `sqlite-vec` y requiere un modelo de embeddings en el
-mismo endpoint configurado para chat. Configúralo con
-`[agent].embedding_model` o `SPECNATIVE_AGENT_EMBEDDING_MODEL`. Si el proveedor
-no admite embeddings, ASN muestra un aviso, conserva el historial SQL y sigue
-la sesión sin recuerdos vectoriales. Cuando está activa, recupera hasta cinco
-turnos del repositorio y prioriza la iniciativa actual.
+La búsqueda semántica usa `sqlite-vec` y permite un modelo, URL base y clave
+independientes del chat: `[agent].embedding_model`,
+`[agent].embedding_api_base` y opcionalmente `[agent].embedding_api_key_env`.
+La clave reutiliza la de chat si no se configura un nombre de variable aparte.
+Ejecuta `asn --test-embeddings` para validar endpoint y modelo, y obtener la
+dimensión sin imprimir la clave ni el vector. Una prueba exitosa registra la
+huella validada en SQLite; ASN sólo habilita ese perfil. Tras un cambio de
+perfil, vuelve a ejecutar el diagnóstico; ASN conserva el índice previo y
+construye el nuevo en segundo plano. Mientras se
+indexa o si falla, no busca usando vectores de otro perfil; el historial SQL se
+conserva y la reconstrucción se reanuda al volver a iniciar ASN. Cuando está
+activa, recupera hasta cinco turnos y prioriza la iniciativa actual.
 
 Consulta [Memoria e historial en SQLite](history-and-sqlite.md) para conocer
 las tablas, el flujo de recuperación, la separación del eval temporal y los

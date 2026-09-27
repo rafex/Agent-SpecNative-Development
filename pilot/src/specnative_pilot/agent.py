@@ -49,7 +49,7 @@ Reglas obligatorias:
 - No implementes código ni uses herramientas de ejecución de código.
 """
 
-GROQ_GPT_OSS_SYSTEM_PROMPT = """Eres el agente ASN para definir iniciativas SpecNative.
+GPT_OSS_SYSTEM_PROMPT = """Eres el agente ASN para definir iniciativas SpecNative.
 Resuelve una sola acción por llamada usando una herramienta del catálogo. Si falta
 información, llama `final_answer` con una pregunta breve y concreta; no propongas
 SPEC ni TASKS incompletas. Cuando haya datos suficientes, consulta con las
@@ -59,6 +59,27 @@ propuestas y el usuario debe aprobarlas antes de cualquier escritura.
 No inventes decisiones importantes. Nunca escribas archivos ni llames herramientas
 que no estén en el catálogo. Después de recibir una observación MCP, continúa con
 una herramienta o responde mediante `final_answer`.
+
+Herramientas disponibles:
+{%- for tool in tools.values() %}
+- {{ tool.to_tool_calling_prompt() }}
+{%- endfor %}
+
+{{ custom_instructions }}
+"""
+
+GROQ_GPT_OSS_SYSTEM_PROMPT = """Eres el agente ASN para definir iniciativas SpecNative.
+En cada respuesta devuelve una sola acción mediante el JSON de salida estructurado:
+`tool_name` contiene el nombre de una herramienta permitida y `arguments` contiene
+un objeto de argumentos serializado como JSON en texto. Para responder al usuario,
+usa `tool_name=final_answer` y `arguments` con la forma `{"answer":"..."}`.
+Si falta información, formula una pregunta breve mediante `final_answer`. No
+propongas SPEC ni TASKS incompletas. Consulta PRODUCT, ROADMAP y decisiones
+pertinentes antes de proponer. `propose_change` sólo recopila propuestas; el
+usuario debe aprobarlas antes de cualquier escritura. Nunca inventes decisiones
+importantes ni selecciones herramientas fuera del catálogo. Para diseños que
+imiten accesos de servicios reales, guía hacia una marca ficticia; no copies
+logos, identidad ni flujos reales ni recolectes credenciales de terceros.
 
 Herramientas disponibles:
 {%- for tool in tools.values() %}
@@ -85,6 +106,16 @@ GROQ_GPT_OSS_PROMPT_TEMPLATES = {
         "post_messages": "Responde al mensaje actual de forma clara:\n{{task}}",
     },
 }
+
+GPT_OSS_PROMPT_TEMPLATES = {
+    **GROQ_GPT_OSS_PROMPT_TEMPLATES,
+    "system_prompt": GPT_OSS_SYSTEM_PROMPT,
+}
+
+
+def _uses_gpt_oss(model) -> bool:
+    is_target = getattr(model, "_is_gpt_oss", None)
+    return bool(is_target()) if callable(is_target) else False
 
 
 def _uses_groq_gpt_oss(model) -> bool:
@@ -116,7 +147,11 @@ class SpecNativeAgent:
             tools=[*mcp.read_tools, proposal_tool],
             model=model,
             instructions=SYSTEM_INSTRUCTIONS,
-            prompt_templates=GROQ_GPT_OSS_PROMPT_TEMPLATES if _uses_groq_gpt_oss(model) else None,
+            prompt_templates=(
+                GROQ_GPT_OSS_PROMPT_TEMPLATES
+                if _uses_groq_gpt_oss(model)
+                else GPT_OSS_PROMPT_TEMPLATES if _uses_gpt_oss(model) else None
+            ),
             max_steps=max_steps,
             add_base_tools=False,
         )

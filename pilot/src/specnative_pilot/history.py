@@ -3,30 +3,69 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import struct
+import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-class EmbeddingClient:
-    """OpenAI-compatible embedding client sharing ASN's configured endpoint/key."""
+def _safe_endpoint(value: str | None) -> str | None:
+    if not value:
+        return None
+    try:
+        parts = urlsplit(value)
+        host = parts.hostname or ""
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        port = f":{parts.port}" if parts.port is not None else ""
+        return urlunsplit((parts.scheme, host + port, parts.path, "", ""))
+    except ValueError:
+        return "[URL OCULTA]"
 
-    def __init__(self, *, api_key: str, model: str, base_url: str | None = None) -> None:
+
+class EmbeddingClient:
+    """OpenAI-compatible embedding client with an independent endpoint/key."""
+
+    def __init__(self, *, api_key: str, model: str, base_url: str | None = None, call_history=None) -> None:
         from openai import OpenAI
 
         self.model = model
+        self.base_url = base_url
+        self.call_history = call_history
         self.client = OpenAI(api_key=api_key, base_url=base_url)
 
     def embed(self, text: str) -> list[float]:
-        result = self.client.embeddings.create(model=self.model, input=text)
-        return list(result.data[0].embedding)
+        started = time.perf_counter()
+        error = None
+        result = None
+        try:
+            result = self.client.embeddings.create(model=self.model, input=text)
+            return list(result.data[0].embedding)
+        except Exception as caught:
+            error = caught
+            raise
+        finally:
+            if self.call_history is not None:
+                usage = getattr(result, "usage", None)
+                self.call_history.record_call(
+                    model=self.model,
+                    endpoint=_safe_endpoint(self.base_url),
+                    elapsed_ms=(time.perf_counter() - started) * 1000,
+                    success=error is None,
+                    error_type=type(error).__name__ if error else None,
+                    request_type="embedding",
+                    input_tokens=getattr(usage, "prompt_tokens", None),
+                )
 
 
 class HistoryStore:
@@ -38,6 +77,9 @@ class HistoryStore:
         self.vector_error: str | None = None
         self.vector_enabled = embedding_client is not None
         self._sqlite_vec: Any = None
+        self._vector_lock = threading.RLock()
+        self._reindex_thread: threading.Thread | None = None
+        self._cancel_reindex = threading.Event()
         if path is not None:
             path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             try:
@@ -63,7 +105,11 @@ class HistoryStore:
                         success INTEGER NOT NULL,
                         error_type TEXT,
                         status_code INTEGER,
-                        finish_reason TEXT
+                        finish_reason TEXT,
+                        request_type TEXT NOT NULL DEFAULT 'chat',
+                        cached_tokens INTEGER,
+                        input_tokens INTEGER,
+                        output_tokens INTEGER
                     );
                     CREATE TABLE IF NOT EXISTS turns (
                         id INTEGER PRIMARY KEY,
@@ -80,11 +126,22 @@ class HistoryStore:
                     );
                     """
                 )
+                columns = {row[1] for row in connection.execute("PRAGMA table_info(calls)")}
+                for name, declaration in (
+                    ("request_type", "TEXT NOT NULL DEFAULT 'chat'"),
+                    ("cached_tokens", "INTEGER"),
+                    ("input_tokens", "INTEGER"),
+                    ("output_tokens", "INTEGER"),
+                ):
+                    if name not in columns:
+                        connection.execute(f"ALTER TABLE calls ADD COLUMN {name} {declaration}")
                 try:
                     os.chmod(path, 0o600)
                 except OSError:
                     pass
             self._import_legacy_jsonl()
+            if embedding_client is not None and self.vector_enabled:
+                self.configure_embeddings(embedding_client)
 
     @contextmanager
     def _connect(self):
@@ -176,13 +233,15 @@ class HistoryStore:
     ) -> None:
         if self.path is None:
             return
-        with self._connect() as connection:
-            cursor = connection.execute(
-                "INSERT INTO turns(timestamp,session_id,initiative,user_message,assistant_message) VALUES(?,?,?,?,?)",
-                (_now(), session_id, initiative, user_message, assistant_message),
-            )
-            turn_id = int(cursor.lastrowid)
-        self._index_turn(turn_id, initiative, user_message, assistant_message)
+        with self._vector_lock:
+            with self._connect() as connection:
+                cursor = connection.execute(
+                    "INSERT INTO turns(timestamp,session_id,initiative,user_message,assistant_message) VALUES(?,?,?,?,?)",
+                    (_now(), session_id, initiative, user_message, assistant_message),
+                )
+                turn_id = int(cursor.lastrowid)
+            if self.vector_enabled and self.embedding_client is not None:
+                self._start_reindex()
 
     def record_call(
         self,
@@ -194,79 +253,186 @@ class HistoryStore:
         error_type: str | None = None,
         status_code: int | None = None,
         finish_reason: str | None = None,
+        request_type: str = "chat",
+        cached_tokens: int | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
     ) -> None:
         if self.path is None:
             return
         with self._connect() as connection:
             connection.execute(
-                "INSERT INTO calls(timestamp,model,endpoint,elapsed_ms,success,error_type,status_code,finish_reason) VALUES(?,?,?,?,?,?,?,?)",
-                (_now(), model, endpoint, max(0.0, float(elapsed_ms)), int(success), error_type, status_code, finish_reason),
+                "INSERT INTO calls(timestamp,model,endpoint,elapsed_ms,success,error_type,status_code,finish_reason,request_type,cached_tokens,input_tokens,output_tokens) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                (_now(), model, endpoint, max(0.0, float(elapsed_ms)), int(success), error_type, status_code, finish_reason, request_type, cached_tokens, input_tokens, output_tokens),
             )
 
     def _set_vector_error(self, message: str) -> None:
         self.vector_enabled = False
         self.vector_error = message
 
-    def _index_turn(self, turn_id: int, initiative: str, user_message: str, assistant_message: str) -> None:
-        if not self.vector_enabled or self.embedding_client is None or self.path is None:
+    def configure_embeddings(self, embedding_client: EmbeddingClient) -> None:
+        """Select an embedding profile and schedule a resumable background reindex."""
+        self.embedding_client = embedding_client
+        if self.path is None or self._sqlite_vec is None:
+            self.vector_enabled = False
             return
+        self.vector_enabled = True
+        self.vector_error = None
+        self._start_reindex()
+
+    @staticmethod
+    def embedding_profile_fingerprint(model: str, base_url: str | None) -> str:
+        raw = f"{base_url or ''}\0{model}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
+
+    def mark_embedding_profile_tested(self, model: str, base_url: str | None) -> None:
+        if self.path is None:
+            return
+        fingerprint = self.embedding_profile_fingerprint(model, base_url)
+        with self._connect() as connection:
+            connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('embedding_test_fingerprint',?)", (fingerprint,))
+
+    def embedding_profile_was_tested(self, embedding_client: EmbeddingClient) -> bool:
+        if self.path is None:
+            return False
+        fingerprint = self.embedding_profile_fingerprint(embedding_client.model, embedding_client.base_url)
+        with self._connect() as connection:
+            row = connection.execute("SELECT value FROM metadata WHERE key='embedding_test_fingerprint'").fetchone()
+        return bool(row and row[0] == fingerprint)
+
+    def _embedding_fingerprint(self) -> str:
+        client = self.embedding_client
+        if client is None:
+            return ""
+        return self.embedding_profile_fingerprint(getattr(client, "model", ""), getattr(client, "base_url", None))
+
+    def _table_for_fingerprint(self, fingerprint: str) -> str:
+        return "memory_vectors_" + re.sub(r"[^a-f0-9]", "", fingerprint)
+
+    def _start_reindex(self) -> None:
+        if self.path is None or self.embedding_client is None or self._sqlite_vec is None:
+            return
+        with self._vector_lock:
+            fingerprint = self._embedding_fingerprint()
+            with self._connect() as connection:
+                state_key = "vector_state_" + fingerprint
+                metadata = dict(connection.execute("SELECT key,value FROM metadata WHERE key IN ('vector_active_fingerprint',?)", (state_key,)))
+                table = self._table_for_fingerprint(fingerprint)
+                total = connection.execute("SELECT COUNT(*) FROM turns").fetchone()[0]
+                indexed = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] if self._table_exists(connection, table) else 0
+                if metadata.get(state_key) == "ready" and total <= indexed:
+                    connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('vector_active_fingerprint',?)", (fingerprint,))
+                    return
+                if total == 0 and metadata.get(state_key) == "ready":
+                    connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('vector_active_fingerprint',?)", (fingerprint,))
+                    return
+                connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES(?, 'building')", (state_key,))
+                connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES(?,?)", ("vector_build_fingerprint_" + fingerprint, fingerprint))
+            self.vector_error = "La memoria vectorial se está reconstruyendo en segundo plano."
+            if self._reindex_thread is None or not self._reindex_thread.is_alive():
+                self._cancel_reindex = threading.Event()
+                self._reindex_thread = threading.Thread(target=self._reindex_worker, args=(fingerprint, self._cancel_reindex), name="asn-vector-reindex", daemon=True)
+                self._reindex_thread.start()
+
+    def _reindex_worker(self, fingerprint: str, cancel: threading.Event) -> None:
+        table = self._table_for_fingerprint(fingerprint)
+        state_key = "vector_state_" + fingerprint
+        embedding_client = self.embedding_client
         try:
-            vector = self.embedding_client.embed(f"Usuario: {user_message}\nAgente: {assistant_message}")
-            self._insert_vector(turn_id, initiative, vector)
+            if self.path is None or embedding_client is None:
+                return
+            lock_path = self.path.with_suffix(self.path.suffix + ".reindex.lock")
+            lock_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            with lock_path.open("a+b") as lock_file:
+                os.chmod(lock_path, 0o600)
+                try:
+                    import fcntl
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+                except ImportError:
+                    fcntl = None
+                dimension: int | None = None
+                while True:
+                    if cancel.is_set():
+                        return
+                    with self._vector_lock:
+                        with self._connect() as connection:
+                            metadata = dict(connection.execute("SELECT key,value FROM metadata WHERE key IN (?,?)", ("vector_build_dimension_" + fingerprint, state_key)))
+                            dimension = int(metadata["vector_build_dimension_" + fingerprint]) if metadata.get("vector_build_dimension_" + fingerprint) else dimension
+                            if metadata.get(state_key) == "ready":
+                                total = connection.execute("SELECT COUNT(*) FROM turns").fetchone()[0]
+                                indexed = connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] if self._table_exists(connection, table) else 0
+                                if total <= indexed:
+                                    connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('vector_active_fingerprint',?)", (fingerprint,))
+                                    return
+                            rows = connection.execute(
+                                f"SELECT id,initiative,user_message,assistant_message FROM turns WHERE id NOT IN (SELECT rowid FROM {table}) ORDER BY id LIMIT 32"
+                                if self._table_exists(connection, table)
+                                else "SELECT id,initiative,user_message,assistant_message FROM turns ORDER BY id LIMIT 32"
+                            ).fetchall()
+                            if not rows:
+                                connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('vector_active_fingerprint',?)", (fingerprint,))
+                                if dimension is not None:
+                                    connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('vector_dimension',?)", (str(dimension),))
+                                connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES(?, 'ready')", (state_key,))
+                                connection.execute("DELETE FROM metadata WHERE key IN (?,?)", ("vector_build_fingerprint_" + fingerprint, "vector_build_dimension_" + fingerprint))
+                                self.vector_error = None
+                                return
+                    for row in rows:
+                        vector = embedding_client.embed(f"Usuario: {row['user_message']}\nAgente: {row['assistant_message']}")
+                        if cancel.is_set():
+                            return
+                        if not vector:
+                            raise ValueError("embedding vacío")
+                        if dimension is not None and len(vector) != dimension:
+                            raise ValueError("dimensiones de embedding inconsistentes")
+                        dimension = len(vector)
+                        with self._vector_lock:
+                            if cancel.is_set():
+                                return
+                            with self._connect() as connection:
+                                if not self._table_exists(connection, table):
+                                    connection.execute(f"CREATE VIRTUAL TABLE {table} USING vec0(embedding float[{dimension}], +initiative TEXT)")
+                                connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES(?,?)", ("vector_build_dimension_" + fingerprint, str(dimension)))
+                                connection.execute(
+                                    f"INSERT OR REPLACE INTO {table}(rowid,embedding,initiative) VALUES(?,?,?)",
+                                    (row["id"], self._serialize_vector(vector), row["initiative"]),
+                                )
         except Exception as error:
-            self._set_vector_error(
-                f"El endpoint de chat no pudo crear embeddings ({type(error).__name__}); se conserva el historial sin búsqueda vectorial."
-            )
+            self._set_vector_error(f"No se pudo reconstruir el índice vectorial ({type(error).__name__}); el historial SQL se conserva.")
+            try:
+                with self._connect() as connection:
+                    connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES(?, 'failed')", (state_key,))
+            except Exception:
+                pass
+
+    @staticmethod
+    def _table_exists(connection, table: str) -> bool:
+        return connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
 
     @staticmethod
     def _serialize_vector(vector: list[float]) -> bytes:
         return struct.pack(f"{len(vector)}f", *vector)
 
     def _insert_vector(self, turn_id: int, initiative: str, vector: list[float]) -> None:
-        if self.path is None or self._sqlite_vec is None:
-            return
-        with self._connect() as connection:
-            meta = dict(connection.execute("SELECT key,value FROM metadata WHERE key IN ('vector_dimension','embedding_model')"))
-            dimension = len(vector)
-            model_name = self.embedding_client.model if self.embedding_client else ""
-            if "memory_vectors" in {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
-                if meta.get("vector_dimension") != str(dimension) or meta.get("embedding_model") != model_name:
-                    connection.execute("DROP TABLE memory_vectors")
-                    connection.execute("DELETE FROM metadata WHERE key IN ('vector_dimension','embedding_model')")
-            exists = connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_vectors'").fetchone()
-            if not exists:
-                connection.execute(f"CREATE VIRTUAL TABLE memory_vectors USING vec0(embedding float[{dimension}], +initiative TEXT)")
-                connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('vector_dimension',?)", (str(dimension),))
-                connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('embedding_model',?)", (model_name,))
-                rows = connection.execute("SELECT id,initiative,user_message,assistant_message FROM turns WHERE id != ?", (turn_id,)).fetchall()
-            else:
-                rows = []
-            connection.execute(
-                "INSERT OR REPLACE INTO memory_vectors(rowid,embedding,initiative) VALUES(?,?,?)",
-                (turn_id, self._serialize_vector(vector), initiative),
-            )
-        for row in rows:
-            try:
-                prior = self.embedding_client.embed(f"Usuario: {row['user_message']}\nAgente: {row['assistant_message']}")
-                if len(prior) == len(vector):
-                    with self._connect() as connection:
-                        connection.execute(
-                            "INSERT OR REPLACE INTO memory_vectors(rowid,embedding,initiative) VALUES(?,?,?)",
-                            (row["id"], self._serialize_vector(prior), row["initiative"]),
-                        )
-            except Exception as error:
-                self._set_vector_error(f"No se pudo reconstruir el índice vectorial ({type(error).__name__}).")
-                return
+        # Kept as a compatibility hook; insertion is owned by the background worker.
+        self._start_reindex()
 
     def recall(self, query: str, *, initiative: str, limit: int = 5) -> list[dict[str, str]]:
         if self.path is None or not self.vector_enabled or self.embedding_client is None:
             return []
         try:
+            fingerprint = self._embedding_fingerprint()
+            with self._connect() as connection:
+                state_key = "vector_state_" + fingerprint
+                metadata = dict(connection.execute("SELECT key,value FROM metadata WHERE key IN ('vector_active_fingerprint',?)", (state_key,)))
+            if metadata.get("vector_active_fingerprint") != fingerprint or metadata.get(state_key) != "ready":
+                self._start_reindex()
+                return []
+            table = self._table_for_fingerprint(fingerprint)
             vector = self.embedding_client.embed(query)
-            self._ensure_legacy_vectors(vector)
             with self._connect() as connection:
                 rows = connection.execute(
-                    "SELECT rowid AS id, distance FROM memory_vectors WHERE embedding MATCH ? AND k = ? ORDER BY distance",
+                    f"SELECT rowid AS id, distance FROM {table} WHERE embedding MATCH ? AND k = ? ORDER BY distance",
                     (self._serialize_vector(vector), max(limit * 4, limit)),
                 ).fetchall()
                 by_id = {int(row["id"]): float(row["distance"]) for row in rows}
@@ -288,36 +454,12 @@ class HistoryStore:
             )
             return []
 
-    def _ensure_legacy_vectors(self, query_vector: list[float]) -> None:
-        if self.path is None or self._sqlite_vec is None:
-            return
-        with self._connect() as connection:
-            exists = connection.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_vectors'"
-            ).fetchone()
-            metadata = dict(connection.execute("SELECT key,value FROM metadata WHERE key IN ('vector_dimension','embedding_model')"))
-            model_name = self.embedding_client.model if self.embedding_client else ""
-            if exists and (
-                metadata.get("vector_dimension") != str(len(query_vector))
-                or metadata.get("embedding_model") != model_name
-            ):
-                connection.execute("DROP TABLE memory_vectors")
-                connection.execute("DELETE FROM metadata WHERE key IN ('vector_dimension','embedding_model')")
-                exists = None
-            if not exists:
-                dimension = len(query_vector)
-                connection.execute(f"CREATE VIRTUAL TABLE memory_vectors USING vec0(embedding float[{dimension}], +initiative TEXT)")
-                connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('vector_dimension',?)", (str(dimension),))
-                connection.execute("INSERT OR REPLACE INTO metadata(key,value) VALUES('embedding_model',?)", (model_name,))
-                indexed = 0
-            else:
-                indexed = connection.execute("SELECT COUNT(*) FROM memory_vectors").fetchone()[0]
-            total = connection.execute("SELECT COUNT(*) FROM turns").fetchone()[0]
-            missing = connection.execute(
-                "SELECT id,initiative,user_message,assistant_message FROM turns ORDER BY id LIMIT ?", (max(0, total - indexed),)
-            ).fetchall() if total > indexed else []
-        for row in missing:
-            self._index_turn(int(row["id"]), str(row["initiative"]), str(row["user_message"]), str(row["assistant_message"]))
+    def wait_for_reindex(self, timeout: float = 10.0) -> bool:
+        thread = self._reindex_thread
+        if thread is None:
+            return True
+        thread.join(timeout)
+        return not thread.is_alive()
 
     def list_records(self, limit: int = 100) -> dict[str, list[dict[str, Any]]]:
         if self.path is None:
@@ -339,11 +481,20 @@ class HistoryStore:
     def clear(self) -> None:
         if self.path is None:
             return
-        with self._connect() as connection:
-            connection.execute("DELETE FROM calls")
-            connection.execute("DELETE FROM turns")
-            if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_vectors'").fetchone():
-                connection.execute("DELETE FROM memory_vectors")
+        self._cancel_reindex.set()
+        with self._vector_lock:
+            with self._connect() as connection:
+                connection.execute("DELETE FROM calls")
+                connection.execute("DELETE FROM turns")
+                vector_tables = [row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table' AND sql LIKE '%USING vec0%' AND name LIKE 'memory_vectors%'")]
+                for table in vector_tables:
+                    connection.execute(f"DELETE FROM {table}")
+                connection.execute("DELETE FROM metadata WHERE key LIKE 'vector_%'")
+                connection.execute("DELETE FROM metadata WHERE key='embedding_test_fingerprint'")
+        # A cancelled worker may still be waiting for its in-flight provider
+        # request, but it will not write after observing the event. A later
+        # turn can start a fresh worker immediately.
+        self._reindex_thread = None
         legacy = self.path.parent / "sessions" / "latest.jsonl"
         try:
             legacy.unlink(missing_ok=True)

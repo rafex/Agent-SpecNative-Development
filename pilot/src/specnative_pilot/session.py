@@ -83,8 +83,8 @@ class AgentSession:
             raise SessionError("Debes indicar una iniciativa.")
         model = model_builder(config)
         spec_path = config.repo / "spec-native" / "specs" / initiative / "SPEC.md"
-        groq_gpt_oss = getattr(model, "_is_groq_gpt_oss", None)
-        if callable(groq_gpt_oss) and groq_gpt_oss():
+        gpt_oss = getattr(model, "_is_gpt_oss", None)
+        if callable(gpt_oss) and gpt_oss():
             status = str(mcp.call("status"))
             if spec_path.exists():
                 initiative_context = str(mcp.call("read_spec", initiative=initiative))
@@ -107,18 +107,28 @@ class AgentSession:
         if config.history:
             if config.embedding_model:
                 try:
-                    credentials = resolve_credentials(config)
-                    if credentials.api_key:
-                        history.embedding_client = EmbeddingClient(
-                            api_key=credentials.api_key,
-                            model=config.embedding_model,
-                            base_url=credentials.api_base,
-                        )
-                        history.vector_enabled = True
-                        history.vector_error = None
+                    import os
+
+                    has_embedding_key_override = bool(config.embedding_api_key_env)
+                    embedding_key = os.getenv(config.embedding_api_key_env) if has_embedding_key_override else None
+                    credentials = None
+                    if (not has_embedding_key_override and embedding_key is None) or config.embedding_api_base is None:
+                        credentials = resolve_credentials(config)
+                    if not has_embedding_key_override:
+                        embedding_key = credentials.api_key if credentials else None
+                    if not embedding_key:
+                        raise SecretResolutionError("Falta la credencial de embeddings configurada.")
+                    embedding_client = EmbeddingClient(
+                        api_key=embedding_key,
+                        model=config.embedding_model,
+                        base_url=config.embedding_api_base or (credentials.api_base if credentials else None),
+                        call_history=history,
+                    )
+                    if history.embedding_profile_was_tested(embedding_client):
+                        history.configure_embeddings(embedding_client)
                     else:
                         history.vector_enabled = False
-                        history.vector_error = "Falta API key; la memoria queda disponible sin búsqueda vectorial."
+                        history.vector_error = "Perfil de embeddings sin validar; ejecuta `asn --test-embeddings` para habilitar la búsqueda vectorial."
                 except (SecretResolutionError, RuntimeError) as error:
                     history.vector_enabled = False
                     history.vector_error = f"No se pudo configurar embeddings ({type(error).__name__}); el historial sigue activo."

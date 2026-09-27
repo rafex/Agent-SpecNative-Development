@@ -3,24 +3,28 @@ direction: right
 user: Programador { shape: person }
 asn: ASN Agent
 spec: "spec-native/\ncontexto vigente"
-model: "API compatible\nchat + embeddings opcionales"
+model: "API compatible\nchat y embeddings separados"
 sqlite: "SQLite\nmemory.sqlite3" {
   turns: "turns\nmensajes visibles"
-  calls: "calls\nmetadatos resumidos"
-  metadata: "metadata\nmigración y modelo"
-  vec: "memory_vectors\nsqlite-vec opcional"
+  calls: "calls\nrequests, tokens y cache"
+  metadata: "metadata\nhuella + estado índice"
+  vec: "memory_vectors_<hash>\níndice activo"
+  vec_build: "memory_vectors_<nuevo>\nconstrucción en background"
 }
 eval: "JSONL temporal\nrequest + respuesta + duración"
 
 user -> asn: mensaje / respuesta
 asn -> spec: lee vía MCP
-asn -> model: prompt y llamadas de herramienta
-model -> asn: respuesta, tool call o error
+asn -> model: prompt y acción JSON estricta (Groq GPT-OSS)
+model -> asn: respuesta o acción
+asn -> mcp: despacho local validado
 asn -> sqlite.turns: persiste turno
 asn -> sqlite.calls: registra duración y estado
 asn -> eval: registra trazabilidad completa
-asn -> model: embedding de consulta/turno
-model -> asn: vector
-asn -> sqlite.vec: indexa o busca similitud
+asn -> model: embedding de consulta
+model -> asn: vector de consulta
+asn -> sqlite.vec: busca similitud sólo con huella activa
+asn -> sqlite.vec_build: worker indexa turnos en segundo plano
+sqlite.vec_build -> sqlite.metadata: activa tras finalizar completo
 sqlite.vec -> sqlite.turns: IDs candidatos
 sqlite.metadata -> sqlite.vec: versión y dimensión

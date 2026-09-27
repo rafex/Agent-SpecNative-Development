@@ -505,3 +505,21 @@ validation = ["Verificación manual en terminal usando izquierda, derecha, Home 
 ```
 
 Usar un prompt de terminal con edición en línea para todas las entradas interactivas de ASN, incluidas entradas largas y confirmaciones, de modo que izquierda/derecha y Home/End editen el texto correctamente.
+
+### TASK-AGENTE-SPECNATIV-0026 - Implementar protocolo GPT-OSS por modelo y memoria vectorial reindexable
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0026"
+title = "Implementar protocolo GPT-OSS por modelo y memoria vectorial reindexable"
+state = "done"
+priority = "p1"
+owner = "dev"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "GPT-OSS usa la estrategia adecuada sin combinar response_format estricto con tools; los parámetros Groq son aplicados solo en Groq; embeddings admiten endpoint y credencial separados con asn --test-embeddings; los cambios de modelo/endpoint reindexan de forma diferida y recuperable, sin mezclar vectores ni perder turnos o índice anterior; documentación y pruebas cubren las rutas."
+validation = ["Ejecutar pruebas de modelo, configuración, embeddings e historial SQLite.", "Construir documentación MkDocs."]
+completion_evidence = ["`make check VENV=pilot/.venv PYTHON=pilot/.venv/bin/python` terminó correctamente con 145 tests aprobados, compileall y git diff --check. `make docs` construyó MkDocs y `make build` generó wheel y sdist. Se añadieron pruebas específicas de JSON Schema sin tools nativas, migración SQLite, reindexado en segundo plano, cambio atómico de perfil y diagnóstico de embeddings."]
+```
+
+Implementar estrategia GPT-OSS independiente del proveedor, usando JSON Schema estricto y despacho local en endpoints con soporte confirmado (sin combinar schema y tools en Groq) y tools nativas en otros endpoints; configurar opciones Groq reasoning/service tier/cache métricas; separar configuración y diagnóstico de embeddings y añadir reindexado vectorial en segundo plano con SQLite que preserve historial y el índice anterior ante fallos.

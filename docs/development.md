@@ -38,10 +38,12 @@ just batch
 
 El piloto guarda por defecto historial local en
 `.specnative/agent/memory.sqlite3`. Para probar recuperación semántica,
-configura `SPECNATIVE_AGENT_EMBEDDING_MODEL` con un modelo de embeddings que
-acepte el mismo endpoint y credencial. Si el proveedor no soporta embeddings,
-ASN debe avisar y continuar sólo con historial. El eval completo de cada llamada
-permanece en archivos temporales privados.
+configura `SPECNATIVE_AGENT_EMBEDDING_MODEL` y, si el proveedor de chat no expone
+embeddings, `SPECNATIVE_AGENT_EMBEDDING_API_BASE` y
+`SPECNATIVE_AGENT_EMBEDDING_API_KEY_ENV`. Verifica el perfil con
+`asn --test-embeddings`. Los cambios deben reconstruir el índice en segundo
+plano y conservar SQLite SQL y el índice previo. El eval completo de cada
+llamada permanece en archivos temporales privados.
 
 ## Flujo de trabajo SpecNative
 

@@ -134,6 +134,9 @@ class _TracingCompletions:
             finish_reason = response.choices[0].finish_reason
         except (AttributeError, IndexError, TypeError):
             pass
+        usage = getattr(response, "usage", None)
+        details = getattr(usage, "prompt_tokens_details", None)
+        cached_tokens = getattr(details, "cached_tokens", None)
         self._call_history.record_call(
             model=self._model,
             endpoint=_safe_endpoint(self._endpoint),
@@ -142,6 +145,10 @@ class _TracingCompletions:
             error_type=type(error).__name__ if error is not None else None,
             status_code=getattr(error, "status_code", None) if error is not None else getattr(response, "_asn_status_code", None),
             finish_reason=str(finish_reason) if finish_reason is not None else None,
+            request_type="chat",
+            cached_tokens=cached_tokens,
+            input_tokens=getattr(usage, "prompt_tokens", None),
+            output_tokens=getattr(usage, "completion_tokens", None),
         )
 
     def create(self, **request: Any) -> Any:

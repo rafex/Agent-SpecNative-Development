@@ -63,14 +63,13 @@ los temporales según su política. No registra headers de autenticación ni el
 token. `asn --test` no se incluye en este eval; `asn --test-mcp` sí genera
 un eval del ciclo de diagnóstico.
 
-El modelo y endpoint deben admitir llamadas a herramientas (tool calling). ASN
-configura Groq GPT-OSS con `tool_choice=auto` para permitir que el agente
-termine con una respuesta normal después de ejecutar herramientas. Si se fuerza
-`tool_choice=required` y el proveedor rechaza la llamada, ASN reintenta una vez;
-si vuelve a fallar, el turno queda pendiente para una recuperación manual y no
-se aplican cambios. `asn --test`
-comprueba la llamada a herramienta antes de iniciar y el log de fallas registra
-el esfuerzo efectivo y el número de peticiones enviadas, sin guardar prompts.
+GPT-OSS se detecta por el nombre del modelo, sin importar el proveedor. Groq
+GPT-OSS usa una acción JSON estricta y despacho local porque Groq no permite
+combinar Structured Outputs estrictos y tools nativas en una petición. Otros
+endpoints GPT-OSS siguen usando tool calling nativo. En Groq ASN manda
+`include_reasoning=false` y `service_tier=auto` por defecto; las opciones válidas
+se configuran en `[agent].service_tier`. SQLite registra tokens cacheados si el
+proveedor los devuelve. `asn --test` comprueba tool calling antes de iniciar.
 
 `asn --test-mcp --repo .` valida también el ciclo completo con el servidor
 MCP configurado. Registra el catálogo real de 20 tools MCP de solo lectura,
@@ -89,9 +88,11 @@ Por defecto, SQLite guarda turnos visibles y metadatos resumidos de llamadas
 por repositorio en `.specnative/agent/memory.sqlite3`; los requests/responses
 completos del eval quedan en temporales privados. Administra los registros con
 `asn history list`, `asn history export` y `asn history clear`. Configura
-`[agent].embedding_model` o `SPECNATIVE_AGENT_EMBEDDING_MODEL` para habilitar
-memoria vectorial con `sqlite-vec`. Si el endpoint no admite embeddings, ASN
-continúa con historial y muestra un aviso.
+`[agent].embedding_model` o `SPECNATIVE_AGENT_EMBEDDING_MODEL` para los
+embeddings; endpoint y clave pueden ser independientes mediante
+`embedding_api_base`/`embedding_api_key_env`. Ejecuta `asn --test-embeddings`
+para validar y habilitar el perfil. sqlite-vec reindexa en segundo plano y
+conserva el historial SQL y el índice anterior ante fallos.
 
 ## Ayuda de desarrollo
 

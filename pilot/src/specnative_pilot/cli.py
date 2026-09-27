@@ -24,6 +24,7 @@ def main(preflight_default: bool = False) -> int:
     parser.add_argument("--auth", action="store_true", help="Configura credenciales ASN cifradas con SOPS/age")
     parser.add_argument("--test", action="store_true", help="Valida URL, modelo y token con una petición corta vía curl")
     parser.add_argument("--test-mcp", action="store_true", help="Prueba el ciclo del agente con el catálogo MCP seguro real")
+    parser.add_argument("--test-embeddings", action="store_true", help="Valida endpoint, modelo y credencial de embeddings")
     parser.add_argument("--clients", choices=["all", "codex", "claude", "opencode"], default="all")
     parser.add_argument("--backend", choices=["sops", "gopass"], help="Backend para `asn secrets init`")
     parser.add_argument("--prefix", help="Prefijo de referencias para gopass")
@@ -44,9 +45,9 @@ def main(preflight_default: bool = False) -> int:
         help="Valida el contexto antes de iniciar el modelo",
     )
     args = parser.parse_args()
-    if args.test and args.test_mcp:
-        parser.error("--test y --test-mcp son pruebas independientes y no se pueden combinar")
-    if (args.test or args.test_mcp) and (args.command is not None or args.subcommand is not None or args.auth):
+    if sum((args.test, args.test_mcp, args.test_embeddings)) > 1:
+        parser.error("--test, --test-mcp y --test-embeddings son pruebas independientes y no se pueden combinar")
+    if (args.test or args.test_mcp or args.test_embeddings) and (args.command is not None or args.subcommand is not None or args.auth):
         parser.error("las pruebas no se combinan con comandos administrativos ni --auth")
     if args.auth:
         if args.command is not None or args.subcommand is not None:
@@ -109,7 +110,9 @@ def main(preflight_default: bool = False) -> int:
             print(f"Llamadas al modelo: {len(records['calls'])}; turnos guardados: {len(records['turns'])}")
             for call in records["calls"]:
                 status = "ok" if call["success"] else str(call["error_type"] or "error")
-                print(f"{call['timestamp']}  {call['model'] or '?'}  {call['elapsed_ms']:.0f} ms  {status}")
+                request_type = call.get("request_type") or "chat"
+                cached = f"  caché={call['cached_tokens']} tokens" if call.get("cached_tokens") else ""
+                print(f"{call['timestamp']}  [{request_type}]  {call['model'] or '?'}  {call['elapsed_ms']:.0f} ms  {status}{cached}")
             for turn in records["turns"]:
                 prompt = turn["user_message"].replace("\n", " ")[:100]
                 print(f"{turn['timestamp']}  {turn['initiative']}  {prompt}")
@@ -174,6 +177,39 @@ def main(preflight_default: bool = False) -> int:
         args.secrets_file,
         args.gopass_file,
     )
+    if args.test_embeddings:
+        from .embedding_check import EmbeddingTestError, check_embeddings
+
+        try:
+            has_embedding_key_override = bool(config.embedding_api_key_env)
+            embedding_key = os.getenv(config.embedding_api_key_env) if has_embedding_key_override else None
+            resolved_embedding_credentials = None
+            if (not has_embedding_key_override and embedding_key is None) or (config.embedding_api_base is None and config.api_base is None):
+                try:
+                    resolved_embedding_credentials = resolve_credentials(config)
+                except SecretResolutionError:
+                    resolved_embedding_credentials = None
+            if not has_embedding_key_override:
+                embedding_key = resolved_embedding_credentials.api_key if resolved_embedding_credentials else None
+            embedding_base = config.embedding_api_base or (
+                resolved_embedding_credentials.api_base if resolved_embedding_credentials else config.api_base
+            )
+            result = check_embeddings(
+                api_key=embedding_key,
+                model=config.embedding_model,
+                base_url=embedding_base,
+            )
+            if config.history:
+                from .history import HistoryStore
+
+                HistoryStore(config.repo / ".specnative" / "agent" / "memory.sqlite3").mark_embedding_profile_tested(
+                    config.embedding_model or "", embedding_base
+                )
+        except (EmbeddingTestError, OSError, RuntimeError) as error:
+            print(f"Falló la validación de embeddings: {error}")
+            return 2
+        print(f"Embeddings validados: modelo `{result.model}`, endpoint {result.endpoint}, dimensión {result.dimension}, duración {result.elapsed_ms:.0f} ms.")
+        return 0
     try:
         credentials = resolve_credentials(config)
         missing = missing_credential_names(config, credentials)
