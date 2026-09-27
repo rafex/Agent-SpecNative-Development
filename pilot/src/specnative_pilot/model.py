@@ -19,6 +19,11 @@ _RETRY_INSTRUCTION = (
     "Reintenta este mismo turno llamando exactamente una herramienta disponible. "
     "Si corresponde responder directamente, usa la herramienta final_answer."
 )
+_EMPTY_OUTPUT_RETRY_INSTRUCTION = (
+    "La respuesta anterior llegó vacía. Continúa este mismo turno: usa una herramienta "
+    "apropiada del catálogo disponible o, si ya puedes responder, llama final_answer. "
+    "No repitas el razonamiento; devuelve una acción válida."
+)
 
 
 class ToolCallRetryExhausted(RuntimeError):
@@ -27,6 +32,28 @@ class ToolCallRetryExhausted(RuntimeError):
     def __init__(self, error: BaseException, attempts: int) -> None:
         super().__init__(str(error))
         self.asn_tool_call_attempts = max(1, attempts)
+
+
+class EmptyModelOutputError(RuntimeError):
+    """Successful completion had neither user-facing content nor a tool call."""
+
+    def __init__(self, attempts: int, finish_reason: str | None = None) -> None:
+        detail = "El proveedor devolvió dos respuestas exitosas sin contenido ni llamada a herramienta."
+        if finish_reason:
+            detail += f" finish_reason={finish_reason}."
+        super().__init__(detail)
+        self.asn_tool_call_attempts = max(1, attempts)
+
+
+def find_empty_model_output_error(error: BaseException) -> EmptyModelOutputError | None:
+    current: BaseException | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, EmptyModelOutputError):
+            return current
+        current = current.__cause__ or current.__context__
+    return None
 
 
 def _append_retry_instruction(messages):
@@ -59,6 +86,48 @@ def _append_retry_instruction(messages):
         "content": [{"type": "text", "text": _RETRY_INSTRUCTION}],
     })
     return retry_messages
+
+
+def _append_empty_output_retry_instruction(messages):
+    retry_messages = deepcopy(messages)
+    if retry_messages:
+        last = retry_messages[-1]
+        role = last.get("role") if isinstance(last, dict) else last.role
+        if getattr(role, "value", role) == "user":
+            content = last.get("content") if isinstance(last, dict) else last.content
+            if isinstance(content, list):
+                content.append({"type": "text", "text": _EMPTY_OUTPUT_RETRY_INSTRUCTION})
+            elif isinstance(content, str) and content:
+                content = [
+                    {"type": "text", "text": content},
+                    {"type": "text", "text": _EMPTY_OUTPUT_RETRY_INSTRUCTION},
+                ]
+            else:
+                content = [{"type": "text", "text": _EMPTY_OUTPUT_RETRY_INSTRUCTION}]
+            if isinstance(last, dict):
+                last["content"] = content
+            else:
+                last.content = content
+            return retry_messages
+    retry_messages.append({
+        "role": "user",
+        "content": [{"type": "text", "text": _EMPTY_OUTPUT_RETRY_INSTRUCTION}],
+    })
+    return retry_messages
+
+
+def _is_empty_completion(message: Any) -> bool:
+    return not getattr(message, "tool_calls", None) and not str(
+        getattr(message, "content", "") or ""
+    ).strip()
+
+
+def _finish_reason(message: Any) -> str | None:
+    try:
+        value = message.raw.choices[0].finish_reason
+    except (AttributeError, IndexError, TypeError):
+        return None
+    return str(value) if value is not None else None
 
 
 def _is_groq_gpt_oss(model_id: str | None, api_base: str | None) -> bool:
@@ -163,7 +232,7 @@ class OpenAIServerModel(_OpenAIServerModel):
         eval_log = getattr(self, "eval_log", None)
         calls_before = eval_log.request_count if eval_log is not None else 0
         try:
-            return super().generate(
+            response = super().generate(
                 messages,
                 stop_sequences=stop_sequences,
                 response_format=response_format,
@@ -183,18 +252,36 @@ class OpenAIServerModel(_OpenAIServerModel):
             ):
                 raise
 
-        retry_messages = _append_retry_instruction(messages)
-        try:
-            return super().generate(
+            retry_messages = _append_retry_instruction(messages)
+            try:
+                return super().generate(
+                    retry_messages,
+                    stop_sequences=stop_sequences,
+                    response_format=response_format,
+                    tools_to_call_from=tools_to_call_from,
+                    **kwargs,
+                )
+            except Exception as retry_error:
+                attempts = eval_log.request_count - calls_before if eval_log is not None else 1
+                raise ToolCallRetryExhausted(retry_error, attempts) from retry_error
+
+        if (
+            self._is_groq_gpt_oss()
+            and tools_to_call_from
+            and _is_empty_completion(response)
+        ):
+            retry_messages = _append_empty_output_retry_instruction(messages)
+            response = super().generate(
                 retry_messages,
                 stop_sequences=stop_sequences,
                 response_format=response_format,
                 tools_to_call_from=tools_to_call_from,
                 **kwargs,
             )
-        except Exception as retry_error:
-            attempts = eval_log.request_count - calls_before if eval_log is not None else 1
-            raise ToolCallRetryExhausted(retry_error, attempts) from retry_error
+            if _is_empty_completion(response):
+                attempts = eval_log.request_count - calls_before if eval_log is not None else 2
+                raise EmptyModelOutputError(attempts, _finish_reason(response))
+        return response
 
 
 def build_model(config: Config) -> OpenAIServerModel:

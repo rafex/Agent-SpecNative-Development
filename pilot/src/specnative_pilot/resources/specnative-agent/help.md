@@ -51,9 +51,13 @@ comprueba la llamada a herramienta antes de iniciar y el log de fallas registra
 el esfuerzo efectivo y el número de peticiones enviadas, sin guardar prompts.
 
 `asn --test-mcp --repo .` valida también el ciclo completo con el servidor
-MCP configurado: el agente llama a la tool de solo lectura `status`, procesa
-su respuesta y termina. Hace llamadas reales al modelo, puede consumir cuota y
-muestra la etapa del error, el número de peticiones y la ruta del eval temporal.
+MCP configurado. Registra el catálogo real de 20 tools MCP de solo lectura,
+`propose_change` (colector local sin escritura) y `final_answer`; el flujo de
+prueba sólo ejecuta `status` y `final_answer`. Hace llamadas reales al modelo,
+puede consumir cuota y muestra la etapa del error, el número de peticiones y la
+ruta del eval temporal. Si Groq GPT-OSS devuelve una respuesta exitosa vacía,
+ASN reintenta una vez y detiene el turno con un error claro si vuelve a ocurrir.
+El campo `reasoning` nunca se usa como respuesta.
 
 ## Ayuda de desarrollo
 

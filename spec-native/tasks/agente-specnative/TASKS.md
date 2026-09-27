@@ -362,3 +362,25 @@ completion_evidence = ["`XDG_CONFIG_HOME=/tmp/asn-test-config XDG_STATE_HOME=/tm
 ```
 
 Agregar una prueba end-to-end del agente y MCP para diagnosticar fallas de tool calling y corregir el retry cuando smolagents normaliza resultados MCP al rol user.
+
+### TASK-AGENTE-SPECNATIV-0019 - Robustecer respuestas vacías y ampliar el diagnóstico agente-MCP
+
+> **Update 2026-09-27T02:20:30Z:** Implementado reintento único para respuestas exitosas vacías de Groq GPT-OSS, fallo explícito y catálogo de diagnóstico alineado con las tools seguras de producción.
+
+> **Update 2026-09-27T02:16:37Z:** Implementación autorizada tras el diagnóstico del caso Groq GPT-OSS; mantengo el proveedor y limito la recuperación a un reintento.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0019"
+title = "Robustecer respuestas vacías y ampliar el diagnóstico agente-MCP"
+state = "done"
+priority = "p1"
+owner = "rafex"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "Groq GPT-OSS recibe un único reintento cuando una respuesta exitosa llega vacía; si vuelve vacía, ASN termina con un error diagnóstico sin exponer razonamiento ni entrar en un bucle de parsing. asn --test-mcp registra todo el catálogo MCP de solo lectura más propose_change local y valida status seguido de final_answer sin escritura. La documentación describe el comportamiento."
+validation = ["uv run --project pilot pytest -q", "make docs", "git diff --check", "SpecNative validate"]
+completion_evidence = ["`uv run --project pilot pytest -q` pasó: 117 tests. `make docs` construyó el sitio correctamente (emitió sólo la advertencia del proyecto MkDocs Material sobre MkDocs 2.0). `git diff --check` pasó tras normalizar el EOF de TASKS.md. SpecNative validate pasó: 15 archivos y referencias válidos."]
+```
+
+Evitar bucles de parsing cuando Groq GPT-OSS devuelve HTTP 200 sin contenido ni tool call, y hacer que asn --test-mcp reproduzca el catálogo seguro real del agente.

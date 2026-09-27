@@ -12,6 +12,8 @@ from smolagents.models import (
 
 from specnative_pilot.config import Config
 from specnative_pilot.mcp_check import AgentMcpTestError, check_agent_mcp
+from specnative_pilot.mcp import READ_ONLY_TOOLS
+from specnative_pilot.model import EmptyModelOutputError
 
 
 def _tool_call(name, arguments):
@@ -115,21 +117,28 @@ def test_agent_mcp_check_executes_read_tool_and_continues(tmp_path):
 def test_agent_mcp_check_does_not_expose_write_tools(tmp_path, monkeypatch):
     model = SequenceModel(_responses(), tmp_path / "eval.jsonl")
     status = StatusTool()
+    other_read_tools = [
+        type(f"Stub_{name}", (StatusTool,), {"name": name})()
+        for name in READ_ONLY_TOOLS - {"status"}
+    ]
     registered_tools = []
     original = ToolCallingAgent.__init__
 
     def capture_tools(self, *args, **kwargs):
-        registered_tools.extend(kwargs["tools"])
         original(self, *args, **kwargs)
+        registered_tools.extend(self.tools)
 
     monkeypatch.setattr(ToolCallingAgent, "__init__", capture_tools)
     check_agent_mcp(
         config(tmp_path),
         model_builder=lambda _: model,
-        mcp_factory=lambda *_: FakeMcp([status, SimpleNamespace(name="write_spec")]),
+        mcp_factory=lambda *_: FakeMcp(
+            [status, *other_read_tools, SimpleNamespace(name="write_spec")]
+        ),
     )
 
-    assert [tool.name for tool in registered_tools] == ["status"]
+    assert set(registered_tools) == READ_ONLY_TOOLS | {"propose_change", "final_answer"}
+    assert "write_spec" not in registered_tools
 
 
 def test_agent_mcp_check_reports_missing_status_tool(tmp_path):
@@ -177,6 +186,24 @@ def test_agent_mcp_check_classifies_failure_after_tool_result(tmp_path):
     assert error.value.stage == "continuación tras MCP"
     assert error.value.request_count == 2
     assert status.called == 1
+
+
+def test_agent_mcp_check_explains_repeated_empty_provider_output(tmp_path):
+    model = SequenceModel(
+        _responses(EmptyModelOutputError(2, "stop")),
+        tmp_path / "eval.jsonl",
+    )
+
+    with pytest.raises(AgentMcpTestError, match="dos respuestas exitosas sin contenido") as error:
+        check_agent_mcp(
+            config(tmp_path),
+            model_builder=lambda _: model,
+            mcp_factory=lambda *_: FakeMcp([StatusTool()]),
+        )
+
+    assert error.value.stage == "continuación tras MCP"
+    assert error.value.request_count == 2
+    assert error.value.asn_tool_call_attempts == 2
 
 
 def test_agent_mcp_check_classifies_mcp_tool_execution_failure(tmp_path):

@@ -1,6 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from smolagents.models import (
     ChatMessage,
     ChatMessageToolCall,
@@ -198,6 +199,74 @@ def test_groq_gpt_oss_retries_matching_missing_tool_call_once(monkeypatch):
     assert user_messages[0].content == [{"type": "text", "text": "describe an idea"}]
     assert requests[0][1] == requests[1][1]
     assert requests[1][1]["tools_to_call_from"] == [tool]
+
+
+def test_groq_gpt_oss_retries_successful_empty_response_once(monkeypatch):
+    requests = []
+    empty = SimpleNamespace(content="", tool_calls=[], reasoning="private reasoning")
+    completed = ChatMessage(role=MessageRole.ASSISTANT, content="Done.")
+
+    def fake_generate(self, messages, **kwargs):
+        requests.append((get_clean_message_list(messages), kwargs))
+        self.eval_log.request_started()
+        return empty if len(requests) == 1 else completed
+
+    monkeypatch.setattr(model._OpenAIServerModel, "generate", fake_generate)
+    messages = [ChatMessage(role=MessageRole.USER, content="Continue the request.")]
+    tool = SimpleNamespace(name="status")
+
+    result = _groq_model_instance().generate(messages, tools_to_call_from=[tool], tool_choice="auto")
+
+    assert result is completed
+    assert len(requests) == 2
+    assert "La respuesta anterior llegó vacía" in requests[1][0][0]["content"][-1]["text"]
+    assert requests[0][1] == requests[1][1]
+    assert messages[0].content == "Continue the request."
+    assert "private reasoning" not in repr(requests[1])
+
+
+def test_groq_gpt_oss_stops_after_second_successful_empty_response(monkeypatch):
+    requests = []
+    empty = SimpleNamespace(
+        content="",
+        tool_calls=[],
+        reasoning="secret reasoning must not appear",
+        raw=SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")]),
+    )
+
+    def fake_generate(self, messages, **kwargs):
+        requests.append(messages)
+        self.eval_log.request_started()
+        return empty
+
+    monkeypatch.setattr(model._OpenAIServerModel, "generate", fake_generate)
+    instance = _groq_model_instance()
+
+    with pytest.raises(model.EmptyModelOutputError, match="dos respuestas exitosas sin contenido") as error:
+        instance.generate(
+            [ChatMessage(role=MessageRole.USER, content="Request")],
+            tools_to_call_from=[SimpleNamespace(name="status")],
+            tool_choice="auto",
+        )
+
+    assert len(requests) == 2
+    assert error.value.asn_tool_call_attempts == 2
+    assert "finish_reason=stop" in str(error.value)
+    assert "secret reasoning" not in str(error.value)
+
+
+def test_groq_gpt_oss_does_not_retry_empty_response_without_tools(monkeypatch):
+    requests = []
+    empty = SimpleNamespace(content="", tool_calls=[])
+
+    def fake_generate(self, messages, **kwargs):
+        requests.append(messages)
+        return empty
+
+    monkeypatch.setattr(model._OpenAIServerModel, "generate", fake_generate)
+
+    assert _groq_model_instance().generate([ChatMessage(role=MessageRole.USER, content="Request")]) is empty
+    assert len(requests) == 1
 
 
 def test_retry_after_tool_response_serializes_as_one_user_message():

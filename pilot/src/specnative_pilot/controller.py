@@ -13,7 +13,7 @@ from .failure_log import record_failure
 from .history import HistoryStore
 from .intent import parse_template_command
 from .mcp import SpecNativeMcp
-from .model import build_model, tool_call_attempts
+from .model import build_model, find_empty_model_output_error, tool_call_attempts
 from .session import AgentSession
 from .templates import spec_template_names
 
@@ -212,6 +212,7 @@ class Controller:
                     client_kwargs = getattr(model, "client_kwargs", {}) or {}
                     model_kwargs = getattr(model, "kwargs", {}) or {}
                     attempts = tool_call_attempts(error)
+                    empty_output = find_empty_model_output_error(error)
                     record_failure(
                         "agent_generation",
                         error,
@@ -223,12 +224,18 @@ class Controller:
                         include_traceback=True,
                     )
                     session.close()
-                    self.say(
-                        "Error del modelo: no pudo completar una llamada a herramienta. "
-                        "ASN requiere un modelo y endpoint compatibles con tool calling. "
-                        f"ASN realizó {attempts} intento(s). Revisa la configuración del proveedor y vuelve a iniciar ASN. "
-                        "No se modificaron archivos."
-                    )
+                    if empty_output is not None:
+                        self.say(
+                            f"Error del modelo: {empty_output} ASN detuvo el turno tras "
+                            f"{attempts} intento(s). No se modificaron archivos."
+                        )
+                    else:
+                        self.say(
+                            "Error del modelo: no pudo completar una llamada a herramienta. "
+                            "ASN requiere un modelo y endpoint compatibles con tool calling. "
+                            f"ASN realizó {attempts} intento(s). Revisa la configuración del proveedor y vuelve a iniciar ASN. "
+                            "No se modificaron archivos."
+                        )
                     return 2
                 self.say(str(result.get("text", "")))
                 if result.get("status") != "approval_required":

@@ -22,7 +22,7 @@ def main(preflight_default: bool = False) -> int:
     parser.add_argument("--repo", type=Path, help="Repositorio destino (por defecto, cwd o su proyecto SpecNative)")
     parser.add_argument("--auth", action="store_true", help="Configura credenciales ASN cifradas con SOPS/age")
     parser.add_argument("--test", action="store_true", help="Valida URL, modelo y token con una petición corta vía curl")
-    parser.add_argument("--test-mcp", action="store_true", help="Prueba el ciclo del agente con una tool MCP de lectura")
+    parser.add_argument("--test-mcp", action="store_true", help="Prueba el ciclo del agente con el catálogo MCP seguro real")
     parser.add_argument("--clients", choices=["all", "codex", "claude", "opencode"], default="all")
     parser.add_argument("--backend", choices=["sops", "gopass"], help="Backend para `asn secrets init`")
     parser.add_argument("--prefix", help="Prefijo de referencias para gopass")

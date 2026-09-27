@@ -11,18 +11,20 @@ from smolagents.utils import AgentGenerationError
 
 from .config import Config
 from .mcp import SpecNativeMcp
-from .model import build_model, tool_call_attempts
+from .agent import ProposalTool
+from .mcp import READ_ONLY_TOOLS
+from .model import build_model, find_empty_model_output_error, tool_call_attempts
 
 
 _MCP_TOOL = "status"
 _FINAL_MARKER = "ASN_MCP_OK"
 _DIAGNOSTIC_INSTRUCTIONS = (
-    "Estás ejecutando una prueba técnica de integración. Llama exactamente una vez "
-    "la herramienta status sin argumentos. Después de recibir el resultado, llama "
-    f"final_answer con el texto exacto {_FINAL_MARKER}. No llames otras herramientas "
-    "ni describas el resultado de status."
+    "Estás ejecutando una prueba técnica de integración con el mismo catálogo seguro "
+    "que ASN. Llama exactamente una vez la herramienta status sin argumentos. Después "
+    "de recibir el resultado, llama final_answer con el texto exacto "
+    f"{_FINAL_MARKER}. No llames otras herramientas ni describas el resultado de status."
 )
-_DIAGNOSTIC_TASK = "Comprueba el ciclo de una herramienta MCP de lectura y finaliza la prueba."
+_DIAGNOSTIC_TASK = "Comprueba el ciclo MCP de ASN y finaliza la prueba."
 
 
 @dataclass(frozen=True)
@@ -94,16 +96,20 @@ def check_agent_mcp(
     eval_path = _eval_path(model)
     try:
         with mcp_factory(config.repo, config.mcp_python, config.mcp_script) as mcp:
-            tools = [tool for tool in mcp.read_tools if getattr(tool, "name", None) == _MCP_TOOL]
-            if not tools:
+            tools = [
+                tool for tool in mcp.read_tools
+                if getattr(tool, "name", None) in READ_ONLY_TOOLS
+            ]
+            if not any(getattr(tool, "name", None) == _MCP_TOOL for tool in tools):
                 raise AgentMcpTestError(
                     "MCP discovery",
                     "El servidor MCP no anuncia la herramienta de lectura status.",
                     eval_log_path=eval_path,
                 )
 
+            proposal_tool = ProposalTool("asn-diagnostic", [])
             agent = ToolCallingAgent(
-                tools=tools,
+                tools=[*tools, proposal_tool],
                 model=model,
                 instructions=_DIAGNOSTIC_INSTRUCTIONS,
                 max_steps=3,
@@ -116,9 +122,15 @@ def check_agent_mcp(
                 names = _tool_names(agent)
                 status_called = _MCP_TOOL in names
                 stage = "continuación tras MCP" if status_called else "tool calling del modelo"
+                empty_output = find_empty_model_output_error(error)
+                message = (
+                    str(empty_output)
+                    if empty_output is not None
+                    else f"El ciclo de diagnóstico falló ({type(error).__name__})."
+                )
                 raise AgentMcpTestError(
                     stage,
-                    f"El ciclo de diagnóstico falló ({type(error).__name__}).",
+                    message,
                     request_count=_request_count(model),
                     eval_log_path=eval_path,
                     attempts=tool_call_attempts(error) if isinstance(error, AgentGenerationError) else 1,

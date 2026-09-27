@@ -37,9 +37,13 @@ asn --repo . --question-mode batch
 
 Usa `asn --test` para probar el endpoint y la llamada a herramienta del
 proveedor. Usa `asn --test-mcp --repo .` para probar además el servidor MCP:
-el agente ejecuta `status` (solo lectura) y debe continuar hasta completar la
-respuesta. `--test-mcp` hace llamadas reales al modelo y puede consumir cuota;
-reporta la etapa fallida y la ruta del eval temporal.
+el agente dispone del catálogo real de 20 tools MCP de solo lectura,
+`propose_change` (colector local sin escritura) y `final_answer`; el flujo de
+prueba ejecuta `status` y completa la respuesta. Hace llamadas reales al modelo
+y puede consumir cuota; reporta la etapa fallida y la ruta del eval temporal.
+Si Groq GPT-OSS devuelve una respuesta exitosa vacía, ASN reintenta una vez y
+detiene el turno con un error explícito si vuelve a ocurrir. Nunca usa el campo
+`reasoning` como respuesta.
 
 Cada sesión escribe un eval JSONL bajo una carpeta privada del directorio
 temporal del sistema. La CLI muestra la ruta al iniciar; `agent_session_start`

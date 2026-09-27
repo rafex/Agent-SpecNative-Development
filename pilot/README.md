@@ -42,12 +42,17 @@ oculto si es corto). La solicitud puede consumir cuota.
 Ejecuta `asn --test-mcp --repo .` para probar el ciclo del agente con el MCP
 configurado: el modelo llama a la tool de lectura `status`, ASN la ejecuta y
 el modelo debe completar una respuesta después de recibir el resultado. Esta
-prueba realiza peticiones reales al proveedor y puede consumir cuota. Sólo
-expone `status` y `final_answer`, y muestra la ruta del eval temporal.
+prueba registra el catálogo real de 20 tools MCP de solo lectura, `propose_change`
+(un colector local que no escribe archivos) y `final_answer`. El flujo diagnóstico
+sólo ejecuta `status` y `final_answer`. La prueba realiza peticiones reales al
+proveedor, puede consumir cuota y muestra la ruta del eval temporal.
 Con Groq GPT-OSS, ASN usa `tool_choice=auto`: el modelo puede llamar `status`
 cuando corresponde y devolver una respuesta normal al terminar, sin intentar
 invocar un pseudo-tool `json`. ASN normaliza texto final y el pseudo-tool
 `json` con argumento `answer` al formato `final_answer` esperado por smolagents.
+Si Groq GPT-OSS devuelve una respuesta exitosa vacía, ASN reintenta una vez;
+si vuelve a llegar vacía, detiene el turno con un diagnóstico explícito. El
+campo `reasoning` nunca se usa como respuesta.
 
 Las fallas del CLI y de `asn-agent-mcp` se registran en `asn-failures.jsonl` con
 rotación. ASN prueba `/var/log/asn`, luego la carpeta de logs del usuario
