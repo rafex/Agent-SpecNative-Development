@@ -29,8 +29,21 @@ class Controller:
     def say(self, message: str = "") -> None:
         print(message, file=self.output)
 
+    def read_input(self, prompt: str) -> str:
+        """Read an editable terminal line, preserving injected/non-TTY input."""
+        import sys
+
+        if self.use_terminal_prompt and sys.stdin.isatty() and sys.stdout.isatty():
+            try:
+                from prompt_toolkit import prompt as terminal_prompt
+            except ImportError:
+                pass
+            else:
+                return terminal_prompt(prompt)
+        return self.input(prompt)
+
     def confirm(self, prompt: str) -> bool:
-        return self.input(f"{prompt} [s/N] ").strip().lower() in {"s", "si", "sí", "y", "yes"}
+        return self.read_input(f"{prompt} [s/N] ").strip().lower() in {"s", "si", "sí", "y", "yes"}
 
     def show_help(self) -> None:
         help_path = Path(__file__).parent / "resources" / "specnative-agent" / "help.md"
@@ -75,7 +88,7 @@ class Controller:
             if not self.confirm(f"¿Crear `{value}` de todas formas? Se creará una iniciativa distinta"):
                 if len(similar) == 1:
                     return similar[0]
-                chosen = self.input(f"Escribe el slug que quieres usar ({', '.join(similar)}): ").strip()
+                chosen = self.read_input(f"Escribe el slug que quieres usar ({', '.join(similar)}): ").strip()
                 canonical = next((item for item in similar if item.casefold() == chosen.casefold()), None)
                 if canonical is None:
                     raise RuntimeError("Debes seleccionar una de las iniciativas existentes sugeridas.")
@@ -117,14 +130,14 @@ class Controller:
                 self.say("No hay iniciativas existentes. Puedes escribir un slug nuevo.")
             else:
                 self.say("Iniciativas disponibles: " + ", ".join(initiatives))
-            return self.input(prompt)
+            return self.read_input(prompt)
 
         try:
             from prompt_toolkit import prompt as terminal_prompt
             from prompt_toolkit.completion import FuzzyWordCompleter
         except ImportError:
             self.say("No se pudo cargar el autocompletado; puedes escribir un slug nuevo.")
-            return self.input(prompt)
+            return self.read_input(prompt)
 
         completer = FuzzyWordCompleter(initiatives, WORD=True)
         return terminal_prompt(
@@ -200,7 +213,7 @@ class Controller:
             pending_failed_message: str | None = None
             pending_approval_token: str | None = None
             while True:
-                message = self.input("\n> ").strip()
+                message = self.read_input("\n> ").strip()
                 if message in {"/quit", "/exit"}:
                     session.close()
                     return 0
@@ -241,7 +254,7 @@ class Controller:
                         self.say("Turno fallido descartado; la sesión sigue activa.")
                         continue
                     if message == "/edit":
-                        replacement = self.input("Nuevo mensaje (vacío o /cancel para conservar el anterior): ").strip()
+                        replacement = self.read_input("Nuevo mensaje (vacío o /cancel para conservar el anterior): ").strip()
                         if replacement and replacement != "/cancel":
                             pending_failed_message = replacement
                             self.say("Mensaje pendiente actualizado. Usa /retry para enviarlo o /skip para descartarlo.")

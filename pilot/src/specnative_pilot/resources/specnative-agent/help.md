@@ -26,6 +26,9 @@ completarlo, o escribe uno nuevo. ASN busca slugs bajo `spec-native/specs/` y
 existente, ASN lo advierte y pide confirmación antes de crear una iniciativa
 distinta.
 
+En una terminal interactiva, edita la línea actual con las flechas
+izquierda/derecha y `Home`/`End` antes de enviarla.
+
 Cuando ASN tenga suficiente información, presentará una propuesta. Confirma
 sólo después de revisarla; responder sí la aplica y cualquier otra respuesta la
 rechaza sin modificar archivos. Una propuesta pendiente debe resolverse antes

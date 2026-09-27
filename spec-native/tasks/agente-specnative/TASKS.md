@@ -486,3 +486,22 @@ completion_evidence = ["Implementado en 9e9c522971ff0e1eee6c3ec481bd525da42e49c5
 ```
 
 Mantener ASN interactivo tras agotar reintentos del modelo, permitir reintentar/editar/omitir el mensaje en RAM, mostrar modelo activo y completar escrituras aprobadas usando el MCP incluido cuando el MCP del proyecto no ofrezca write_spec/write_tasks.
+
+### TASK-AGENTE-SPECNATIV-0025 - Habilitar edición interactiva de texto en la terminal
+
+> **Update 2026-09-27T05:33:34Z:** Cambio aplicado para que las entradas TTY usen prompt_toolkit; se conserva input_fn para entradas inyectadas/no TTY. Pendiente verificación manual de teclas en terminal.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0025"
+title = "Habilitar edición interactiva de texto en la terminal"
+state = "in_progress"
+priority = "p2"
+owner = "dev"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "En una terminal interactiva, el prompt principal permite mover el cursor con flechas izquierda/derecha y con Home/End; las inserciones y borrados ocurren en la posición del cursor. Entrada no interactiva y tests que inyectan input_fn conservan el comportamiento actual."
+validation = ["Verificación manual en terminal usando izquierda, derecha, Home y End en un texto de entrada.", "Verificar que el fallback input_fn sigue funcionando fuera de una TTY."]
+```
+
+Usar un prompt de terminal con edición en línea para todas las entradas interactivas de ASN, incluidas entradas largas y confirmaciones, de modo que izquierda/derecha y Home/End editen el texto correctamente.

@@ -30,7 +30,8 @@ evada la validación.
 Al iniciar, ASN muestra el identificador del modelo cargado. En la sesión puedes
 describir la idea y responder las preguntas del agente. `/model` vuelve a mostrar
 el modelo activo; `/help` muestra ayuda, `/quit` cierra la sesión y `/template`
-lista las plantillas disponibles. En modo por bloques:
+lista las plantillas disponibles. En un terminal interactivo, edita la línea con
+las flechas izquierda/derecha y `Home`/`End` antes de enviarla. En modo por bloques:
 
 ```bash
 asn --repo . --question-mode batch
