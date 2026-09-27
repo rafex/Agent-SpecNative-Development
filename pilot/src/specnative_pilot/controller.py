@@ -209,7 +209,7 @@ class Controller:
             self.say(f"Modelo activo: {model_id}")
             if eval_log_path is not None:
                 self.say(f"Eval de llamadas al modelo: {eval_log_path}")
-            self.say("Piloto SpecNative iniciado. Usa /help para ver comandos.")
+            self.say("Piloto SpecNative iniciado. Usa /help para ayuda o /quit (también /exit) para cerrar ASN.")
             pending_failed_message: str | None = None
             pending_approval_token: str | None = None
             while True:
