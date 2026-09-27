@@ -14,11 +14,27 @@ class ProviderTestError(RuntimeError):
     """A safe, user-facing error from the provider connectivity check."""
 
 
+class ProviderModelListError(RuntimeError):
+    """A safe, user-facing error from the provider model catalog request."""
+
+
 @dataclass(frozen=True)
 class ProviderTestResult:
     model: str
     response: str
     status_code: int
+
+
+@dataclass(frozen=True)
+class ProviderModelListResult:
+    model: str
+    model_ids: tuple[str, ...]
+    status_code: int
+    endpoint: str
+
+    @property
+    def configured_model_available(self) -> bool:
+        return self.model in self.model_ids
 
 
 @dataclass(frozen=True)
@@ -41,6 +57,22 @@ def _chat_completions_url(api_base: str | None) -> str:
     path = parts.path.rstrip("/")
     if not path.endswith("/chat/completions"):
         path = f"{path}/chat/completions"
+    return urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
+
+
+def _models_url(api_base: str | None) -> str:
+    base = (api_base or "https://api.openai.com/v1").strip()
+    try:
+        parts = urlsplit(base)
+    except ValueError as error:
+        raise ProviderModelListError("La URL base debe ser una dirección HTTP o HTTPS válida.") from error
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        raise ProviderModelListError("La URL base debe ser una dirección HTTP o HTTPS válida.")
+    path = parts.path.rstrip("/")
+    if path.endswith("/chat/completions"):
+        path = path[: -len("/chat/completions")]
+    if not path.endswith("/models"):
+        path = f"{path}/models"
     return urlunsplit((parts.scheme, parts.netloc, path, parts.query, parts.fragment))
 
 
@@ -251,3 +283,70 @@ def check_provider(
         response=f"tool call `{_PROBE_TOOL_NAME}` validada",
         status_code=status_code,
     )
+
+
+def list_provider_models(credentials: ResolvedCredentials) -> ProviderModelListResult:
+    """Fetch the authenticated OpenAI-compatible GET /models catalog with curl."""
+    if not credentials.api_key or not credentials.api_key.strip():
+        raise ProviderModelListError("Falta el token de API; configura credenciales antes de ejecutar `asn models`.")
+    if "\r" in credentials.api_key or "\n" in credentials.api_key:
+        raise ProviderModelListError("El token contiene caracteres de salto de línea y no se puede validar.")
+    if not credentials.model or not credentials.model.strip():
+        raise ProviderModelListError("Falta el nombre del modelo configurado; revisa `asn --auth`.")
+    url = _models_url(credentials.api_base)
+    curl = shutil.which("curl")
+    if curl is None:
+        raise ProviderModelListError("No se encontró `curl`; instálalo y vuelve a ejecutar `asn models`.")
+    curl_config = "\n".join(
+        (
+            f"url = {_curl_quote(url)}",
+            f"header = {_curl_quote('Authorization: Bearer ' + credentials.api_key)}",
+            f"header = {_curl_quote('Content-Type: application/json')}",
+        )
+    )
+    try:
+        result = subprocess.run(
+            [curl, "--silent", "--show-error", "--connect-timeout", "10", "--max-time", "30", "--get", "--write-out", "\n%{http_code}", "--config", "-"],
+            input=curl_config,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        detail = _redact(str(error), credentials.api_key)
+        raise ProviderModelListError(f"No se pudo consultar el catálogo del proveedor: {detail}") from error
+
+    response_body, separator, status_text = (result.stdout or "").rpartition("\n")
+    if not separator or not status_text.isdigit():
+        detail = _redact((result.stderr or "curl no devolvió una respuesta HTTP válida.").strip(), credentials.api_key)
+        raise ProviderModelListError(f"Falló la consulta del catálogo: {detail}")
+    status_code = int(status_text)
+    if result.returncode != 0:
+        detail = _redact((result.stderr or f"curl terminó con código {result.returncode}.").strip(), credentials.api_key)
+        raise ProviderModelListError(f"Falló la consulta del catálogo: {detail}")
+    try:
+        payload = json.loads(response_body)
+    except (TypeError, ValueError):
+        payload = None
+    if status_code < 200 or status_code >= 300:
+        message = ""
+        if isinstance(payload, dict):
+            error = payload.get("error")
+            if isinstance(error, dict):
+                message = str(error.get("message") or "")
+            elif error:
+                message = str(error)
+        message = _redact(message, credentials.api_key).strip()
+        suffix = f": {message[:400]}" if message else ""
+        raise ProviderModelListError(f"El proveedor respondió HTTP {status_code}{suffix}")
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        raise ProviderModelListError("El proveedor respondió HTTP 200, pero el catálogo no contiene una lista `data` válida.")
+    model_ids = tuple(
+        _redact(item["id"].strip(), credentials.api_key)
+        for item in data
+        if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"].strip()
+    )
+    if len(model_ids) != len(data):
+        raise ProviderModelListError("El catálogo contiene elementos sin un identificador de modelo válido.")
+    return ProviderModelListResult(credentials.model, model_ids, status_code, _display_url(url))

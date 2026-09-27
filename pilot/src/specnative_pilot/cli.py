@@ -10,7 +10,7 @@ from .failure_log import record_failure
 from .mcp_check import AgentMcpTestError, check_agent_mcp
 from . import __version__
 from .mcp_discovery import resolve_project_repo
-from .provider_check import ProviderTestError, check_provider
+from .provider_check import ProviderModelListError, ProviderTestError, check_provider, list_provider_models
 from .secret_setup import SecretSetupError, authenticate, initialize_secrets
 from .secrets import SecretResolutionError, credential_setup_message, missing_credential_names, resolve_credentials
 
@@ -18,7 +18,7 @@ from .secrets import SecretResolutionError, credential_setup_message, missing_cr
 def main(preflight_default: bool = False) -> int:
     parser = argparse.ArgumentParser(description="Piloto interactivo de definición SpecNative")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument("command", nargs="?", choices=["setup", "secrets", "history"], help="Acción administrativa del proyecto")
+    parser.add_argument("command", nargs="?", choices=["setup", "secrets", "history", "models"], help="Acción administrativa del proyecto")
     parser.add_argument("subcommand", nargs="?", choices=["init", "list", "export", "clear"], help="Subcomando administrativo")
     parser.add_argument("--repo", type=Path, help="Repositorio destino (por defecto, cwd o su proyecto SpecNative)")
     parser.add_argument("--auth", action="store_true", help="Configura credenciales ASN cifradas con SOPS/age")
@@ -253,6 +253,25 @@ def main(preflight_default: bool = False) -> int:
         if result.eval_log_path is not None:
             print(f"Eval temporal: {result.eval_log_path}")
         return 0
+    if args.command == "models":
+        try:
+            result = list_provider_models(credentials)
+        except ProviderModelListError as error:
+            record_failure(
+                "provider_models",
+                error,
+                model=credentials.model,
+                endpoint=credentials.api_base,
+                api_key=credentials.api_key,
+            )
+            print(f"No se pudo consultar el catálogo del proveedor: {error}")
+            return 2
+        print(f"GET {result.endpoint} — HTTP {result.status_code}")
+        print(f"Modelo configurado: {result.model} ({'disponible' if result.configured_model_available else 'no aparece en el catálogo'})")
+        print(f"Modelos disponibles ({len(result.model_ids)}):")
+        for model_id in result.model_ids:
+            print(f"- {model_id}")
+        return 0 if result.configured_model_available else 2
     try:
         return Controller(config).run(args.initiative, preflight=args.preflight)
     except KeyboardInterrupt:

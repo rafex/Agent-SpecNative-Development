@@ -446,3 +446,23 @@ completion_evidence = ["Publicación `b74ef023f` en main e instalación local `a
 ```
 
 Completar la integración estructurada de tool calling y continuación para Groq GPT-OSS, instalar esta revisión en la máquina local, configurar ASN para uso y ampliar la documentación MkDocs sobre memoria e historial SQLite/sqlite-vec con diagramas Mermaid y D2.
+
+### TASK-AGENTE-SPECNATIV-0023 - Consultar modelos disponibles del proveedor con ASN
+
+> **Update 2026-09-27T04:58:14Z:** Implementando consulta autenticada GET /models para el endpoint compatible configurado y documentación de uso para Groq.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0023"
+title = "Consultar modelos disponibles del proveedor con ASN"
+state = "done"
+priority = "p2"
+owner = "rafex"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "`asn models --repo <ruta>` consulta el endpoint compatible `/models` con la credencial resuelta por ASN, lista IDs del catálogo y marca el modelo efectivo configurado; respuestas inválidas, HTTP errors y falta de credenciales producen mensajes seguros; los diagnósticos nunca muestran el token. La documentación incluye uso y ejemplo para Groq."
+validation = ["Prueba unitaria simulando GET /models, catálogo vacío y errores HTTP sin imprimir credenciales.", "Verificar URL base con y sin `/v1`, conservando el modelo/end-point esperado.", "Construir documentación MkDocs, compilar Python y revisar git diff --check."]
+completion_evidence = ["`asn models --repo /home/rafex/repository/rafex/portal-captive` ejecutó el GET real a https://api.groq.com/openai/v1/models, recibió HTTP 200, listó 12 IDs y marcó `qwen/qwen3.8-27b` como disponible; el token no apareció en salida. Con ese modelo, `asn --test` validó tool calling, `asn --test-mcp` pasó con 2 requests y el prompt real de portal-captive terminó en pregunta clara con 2 pasos, sin escribir specs. `make docs`, compileall y `git diff --check` correctos."]
+```
+
+Agregar `asn models` para enviar GET /models al endpoint configurado con la misma autenticación segura que ASN. Listar IDs disponibles, marcar el modelo configurado y manejar errores sin imprimir el token. Documentar el comando como validación del catálogo del proveedor.

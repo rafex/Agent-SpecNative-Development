@@ -170,11 +170,11 @@ export SPECNATIVE_AGENT_HISTORY=false
 ```
 
 El nombre de ejemplo `text-embedding-3-small` sólo funcionará cuando el
-endpoint configurado lo ofrezca. En la instalación documentada de esta máquina,
-ASN usa `openai/gpt-oss-120b` en la API de Groq y no tiene `embedding_model`
-configurado. El historial SQLite está activo; `sqlite-vec` está instalado, pero
-no hay búsqueda vectorial hasta elegir un endpoint/modelo de embeddings
-compatible. La persistencia no requiere embeddings.
+endpoint configurado lo ofrezca. La instalación actual de esta máquina usa
+`qwen/qwen3.8-27b` en la API de Groq y no tiene `embedding_model` configurado.
+El historial SQLite está activo; `sqlite-vec` está instalado, pero no hay
+búsqueda vectorial hasta elegir un endpoint/modelo de embeddings compatible. La
+persistencia no requiere embeddings.
 
 ## Comandos de historial
 

@@ -132,6 +132,21 @@ un modelo que el proveedor no reconoce. Un error de conexión apunta a la URL,
 DNS, TLS o red. Una validación correcta confirma que endpoint, modelo y token
 aceptan una llamada a herramienta requerida.
 
+Para consultar el catálogo que expone el proveedor:
+
+```bash
+asn models
+asn models --repo /ruta/al/proyecto
+```
+
+ASN envía un `GET` autenticado a `/models` usando el mismo endpoint y
+credenciales configurados para el agente. Con Groq consulta
+`https://api.groq.com/openai/v1/models`, lista los identificadores devueltos y
+señala si el modelo configurado aparece en el catálogo. El token se envía por
+la configuración privada de `curl`; no aparece en argumentos, salida ni logs.
+El comando devuelve código distinto de cero si falla la consulta o si el modelo
+configurado no figura en la respuesta.
+
 ## Logs de fallas
 
 ASN escribe fallas del CLI y de `asn-agent-mcp` como JSON Lines en
