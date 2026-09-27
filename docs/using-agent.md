@@ -41,12 +41,13 @@ el agente dispone del catálogo real de 20 tools MCP de solo lectura,
 `propose_change` (colector local sin escritura) y `final_answer`; el flujo de
 prueba ejecuta `status` y completa la respuesta. Hace llamadas reales al modelo
 y puede consumir cuota; reporta la etapa fallida y la ruta del eval temporal.
-Si Groq GPT-OSS devuelve una respuesta exitosa vacía, ASN repite el mismo paso
-hasta 12 llamadas totales sin consumir pasos del agente. Usa backoff exponencial
-de 250 ms hasta 2 s y `reasoning_effort=low` en los reintentos; parte de 1024
-`max_completion_tokens` y duplica el límite sólo con `finish_reason=length`,
-hasta 65 536. Al agotarlos, detiene el turno con un error explícito. Nunca usa
-el campo `reasoning` como respuesta.
+Si un proveedor OpenAI-compatible devuelve una respuesta vacía, ASN repite el
+mismo paso hasta 12 llamadas totales sin consumir pasos del agente. Usa backoff
+exponencial de 250 ms hasta 2 s y `reasoning_effort=low` en los reintentos; parte
+de 1024 tokens y duplica el límite sólo con `finish_reason=length`, hasta
+65 536. Si el endpoint rechaza `max_completion_tokens`, reintenta con
+`max_tokens`. Al agotar intentos, detiene el turno con un error explícito.
+Nunca usa el campo `reasoning` como respuesta.
 
 Cada sesión escribe un eval JSONL bajo una carpeta privada del directorio
 temporal del sistema. La CLI muestra la ruta al iniciar; `agent_session_start`
@@ -56,6 +57,30 @@ contexto del repositorio y datos sensibles; no contiene headers de autenticació
 ni el token. Se conserva después de cerrar ASN hasta que el sistema operativo
 limpie los temporales. El probe de `asn --test` queda excluido; `--test-mcp`
 sí registra su ciclo de diagnóstico en un eval temporal.
+
+## Memoria e historial local
+
+Por defecto, ASN guarda por repositorio en
+`.specnative/agent/memory.sqlite3` los turnos visibles y metadatos resumidos de
+cada llamada al modelo. No guarda los cuerpos completos del eval ni secretos en
+SQLite. La base está excluida de Git; los documentos de `spec-native/` siguen
+siendo la fuente de verdad. El historial JSONL previo se importa una sola vez.
+
+```bash
+asn history list --repo .
+asn history export --repo . --output /tmp/asn-history.jsonl
+asn history clear --repo .
+```
+
+El borrado pide confirmación; `--yes` lo hace no interactivo. Puedes desactivar
+la persistencia con `SPECNATIVE_AGENT_HISTORY=false`.
+
+La búsqueda semántica usa `sqlite-vec` y requiere un modelo de embeddings en el
+mismo endpoint configurado para chat. Configúralo con
+`[agent].embedding_model` o `SPECNATIVE_AGENT_EMBEDDING_MODEL`. Si el proveedor
+no admite embeddings, ASN muestra un aviso, conserva el historial SQL y sigue
+la sesión sin recuerdos vectoriales. Cuando está activa, recupera hasta cinco
+turnos del repositorio y prioriza la iniciativa actual.
 
 ## MCP en un cliente de desarrollo
 

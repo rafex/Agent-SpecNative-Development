@@ -342,9 +342,10 @@ def test_groq_gpt_oss_does_not_increase_budget_for_empty_stop_responses(monkeypa
     assert requests == [1024] * 12
 
 
-def test_groq_gpt_oss_does_not_retry_empty_response_without_tools(monkeypatch):
+def test_groq_gpt_oss_retries_empty_response_without_tools(monkeypatch):
     requests = []
     empty = SimpleNamespace(content="", tool_calls=[])
+    monkeypatch.setattr(model.time, "sleep", lambda _: None)
 
     def fake_generate(self, messages, **kwargs):
         requests.append(messages)
@@ -352,29 +353,63 @@ def test_groq_gpt_oss_does_not_retry_empty_response_without_tools(monkeypatch):
 
     monkeypatch.setattr(model._OpenAIServerModel, "generate", fake_generate)
 
-    assert _groq_model_instance().generate(
-        [ChatMessage(role=MessageRole.USER, content="Request")]
-    ) is empty
-    assert len(requests) == 1
+    with pytest.raises(model.EmptyModelOutputError):
+        _groq_model_instance().generate([ChatMessage(role=MessageRole.USER, content="Request")])
+    assert len(requests) == 12
 
 
-def test_other_provider_does_not_retry_empty_response(monkeypatch):
+def test_other_provider_retries_empty_response_within_same_step(monkeypatch):
     requests = []
-    empty = SimpleNamespace(content="", tool_calls=[])
+    responses = [
+        SimpleNamespace(content="", tool_calls=[], raw=SimpleNamespace(choices=[SimpleNamespace(finish_reason="stop")])),
+        ChatMessage(role=MessageRole.ASSISTANT, content="recovered"),
+    ]
+    monkeypatch.setattr(model.time, "sleep", lambda _: None)
 
     def fake_generate(self, messages, **kwargs):
         requests.append(messages)
-        return empty
+        self.eval_log.request_started()
+        return responses.pop(0)
 
     monkeypatch.setattr(model._OpenAIServerModel, "generate", fake_generate)
     instance = _groq_model_instance()
     instance.client_kwargs = {"base_url": "https://api.example.test/v1"}
 
-    assert instance.generate(
+    result = instance.generate(
         [ChatMessage(role=MessageRole.USER, content="Request")],
         tools_to_call_from=[SimpleNamespace(name="status")],
-    ) is empty
-    assert len(requests) == 1
+    )
+    assert result.content == "recovered"
+    assert len(requests) == 2
+
+
+def test_empty_retry_falls_back_to_max_tokens_when_endpoint_rejects_new_parameter(monkeypatch):
+    calls = []
+
+    class UnsupportedParameter(RuntimeError):
+        status_code = 400
+
+    def fake_generate(self, messages, **kwargs):
+        calls.append((dict(kwargs), self.kwargs.get("reasoning_effort")))
+        self.eval_log.request_started()
+        if len(calls) == 1:
+            return _empty_completion()
+        if "max_completion_tokens" in kwargs:
+            raise UnsupportedParameter("Unsupported parameter: max_completion_tokens")
+        return ChatMessage(role=MessageRole.ASSISTANT, content="recovered")
+
+    monkeypatch.setattr(model._OpenAIServerModel, "generate", fake_generate)
+    monkeypatch.setattr(model.time, "sleep", lambda _: None)
+    instance = _groq_model_instance()
+    instance.client_kwargs = {"base_url": "https://api.other.test/v1"}
+
+    result = instance.generate([ChatMessage(role=MessageRole.USER, content="Request")])
+
+    assert result.content == "recovered"
+    assert len(calls) == 3
+    assert calls[1][0]["max_completion_tokens"] == 1024
+    assert calls[2][0]["max_tokens"] == 1024
+    assert calls[1][1] == calls[2][1] == "low"
 
 
 def test_retry_after_tool_response_serializes_as_one_user_message():

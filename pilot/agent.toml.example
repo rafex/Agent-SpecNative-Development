@@ -4,7 +4,10 @@ model = ""
 api_base = ""
 api_key_env = "OPENAI_API_KEY"
 question_mode = "single"
-history = false
+history = true
+# Optional OpenAI-compatible embeddings model; reuses the configured API base and key.
+# Embeddings are disabled with a warning if the provider does not support this endpoint.
+# embedding_model = "text-embedding-3-small"
 max_steps = 12
 # Optional provider reasoning level (for example: low, medium, high).
 # Groq GPT-OSS defaults to low when this setting and its environment override are unset.

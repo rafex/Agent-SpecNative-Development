@@ -237,6 +237,8 @@ class Controller:
                             "No se modificaron archivos."
                         )
                     return 2
+                if result.get("memory_warning"):
+                    self.say(f"Aviso de memoria: {result['memory_warning']}")
                 self.say(str(result.get("text", "")))
                 if result.get("status") != "approval_required":
                     continue

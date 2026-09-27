@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from specnative_pilot import cli
@@ -20,6 +22,43 @@ def test_cli_version_exits_before_loading_config(monkeypatch, capsys):
     output = capsys.readouterr().out.strip()
     assert output.startswith("asn ")
     assert cli.__version__ in output
+
+
+def test_cli_history_list_does_not_require_model_credentials(tmp_path, monkeypatch, capsys):
+    from specnative_pilot.history import HistoryStore
+
+    db = tmp_path / ".specnative/agent/memory.sqlite3"
+    HistoryStore(db).record_turn("idea", "question", initiative="demo")
+    monkeypatch.setattr("sys.argv", ["asn", "history", "list", "--repo", str(tmp_path)])
+    monkeypatch.setattr(cli, "resolve_credentials", lambda *_: (_ for _ in ()).throw(AssertionError("no credentials")))
+
+    assert cli.main() == 0
+    assert "turnos guardados: 1" in capsys.readouterr().out
+
+
+def test_cli_history_export_writes_jsonl(tmp_path, monkeypatch, capsys):
+    from specnative_pilot.history import HistoryStore
+
+    HistoryStore(tmp_path / ".specnative/agent/memory.sqlite3").record_turn("idea", "answer", initiative="demo")
+    output_path = tmp_path / "history.jsonl"
+    monkeypatch.setattr("sys.argv", ["asn", "history", "export", "--repo", str(tmp_path), "--output", str(output_path)])
+
+    assert cli.main() == 0
+    assert '"type": "turn"' in output_path.read_text(encoding="utf-8")
+    assert os.stat(output_path).st_mode & 0o777 == 0o600
+    assert "Historial exportado" in capsys.readouterr().out
+
+
+def test_cli_history_clear_requires_confirmation(tmp_path, monkeypatch, capsys):
+    from specnative_pilot.history import HistoryStore
+
+    HistoryStore(tmp_path / ".specnative/agent/memory.sqlite3").record_turn("idea", "answer", initiative="demo")
+    monkeypatch.setattr("sys.argv", ["asn", "history", "clear", "--repo", str(tmp_path)])
+    monkeypatch.setattr("builtins.input", lambda _: "s")
+
+    assert cli.main() == 0
+    assert HistoryStore(tmp_path / ".specnative/agent/memory.sqlite3").list_records() == {"calls": [], "turns": []}
+    assert "borrado" in capsys.readouterr().out
 
 
 def test_cli_reports_missing_model_and_auth_guidance(tmp_path, monkeypatch, capsys):

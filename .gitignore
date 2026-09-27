@@ -12,8 +12,9 @@ __pycache__/
 # Editable Python installs generate package metadata
 *.egg-info/
 
-# Optional pilot conversation history is local state
+# Local ASN conversation memory and call metadata are private repository state
 .specnative/agent/sessions/
+.specnative/agent/memory.sqlite3*
 
 # MkDocs output is generated locally and in CI
 /site/

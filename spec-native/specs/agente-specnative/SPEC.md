@@ -8,7 +8,7 @@ owner         = "rafex"
 created_at    = "2026-09-17"
 updated_at    = "2026-09-26"
 replaces      = "none"
-related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006", "TASK-AGENTE-SPECNATIV-0007", "TASK-AGENTE-SPECNATIV-0008", "TASK-AGENTE-SPECNATIV-0014", "TASK-AGENTE-SPECNATIV-0015", "TASK-AGENTE-SPECNATIV-0016", "TASK-AGENTE-SPECNATIV-0017", "TASK-AGENTE-SPECNATIV-0018"]
+related_tasks = ["TASK-AGENTE-SPECNATIV-0001", "TASK-AGENTE-SPECNATIV-0002", "TASK-AGENTE-SPECNATIV-0003", "TASK-AGENTE-SPECNATIV-0004", "TASK-AGENTE-SPECNATIV-0005", "TASK-AGENTE-SPECNATIV-0006", "TASK-AGENTE-SPECNATIV-0007", "TASK-AGENTE-SPECNATIV-0008", "TASK-AGENTE-SPECNATIV-0014", "TASK-AGENTE-SPECNATIV-0015", "TASK-AGENTE-SPECNATIV-0016", "TASK-AGENTE-SPECNATIV-0017", "TASK-AGENTE-SPECNATIV-0018", "TASK-AGENTE-SPECNATIV-0019", "TASK-AGENTE-SPECNATIV-0020", "TASK-AGENTE-SPECNATIV-0021"]
 related_decisions = ["DEC-0001"]
 artifacts     = ["pilot/", ".specnative/specnative_mcp.py"]
 validation    = ["cargo test", "specnative validate", "walkthrough de conversación"]
@@ -50,7 +50,7 @@ Incluye:
 Excluye:
 
 - Implementación autónoma de código, revisión de pull requests o despliegue.
-- UI web, servidor persistente y base de datos.
+- UI web, servidor persistente o base de datos centralizada.
 - Dependencia obligatoria de un proveedor específico de modelos.
 - Selección o aplicación automática de plantillas por similitud.
 
@@ -95,11 +95,28 @@ Excluye:
 - RF-13: `asn --test-mcp` debe ejecutar un ciclo real de agente con una
   herramienta MCP de solo lectura, comprobar que el agente continúa después de
   recibir el resultado, y reportar la etapa y eval temporal si falla.
+- RF-14: Ante una respuesta sin contenido utilizable ni llamada a herramienta,
+  el adaptador debe reintentar dentro del mismo paso hasta 12 solicitudes
+  totales. Los reintentos usan `reasoning_effort=low`; si el endpoint rechaza
+  `max_completion_tokens`, ASN reintenta con `max_tokens`. Ninguna respuesta
+  vacía cuenta como paso completado.
+- RF-15: ASN debe conservar por defecto en SQLite local, por repositorio, los
+  metadatos de llamadas y los turnos visibles de usuario/agente. La base no
+  contiene prompts/respuestas crudos del eval ni credenciales, y no reemplaza
+  los documentos canónicos de `spec-native/`.
+- RF-16: Cuando se configure un modelo de embeddings compatible con la URL y
+  credencial del proveedor, ASN indexa turnos visibles con `sqlite-vec` y
+  recupera hasta cinco recuerdos del repositorio, priorizando la iniciativa
+  activa. Si embeddings no están disponibles, conserva historial e informa la
+  degradación sin detener la sesión.
+- RF-17: `asn history list`, `asn history export` y `asn history clear` permiten
+  consultar, exportar a JSONL y borrar los datos locales. La importación del
+  historial JSONL previo debe ser idempotente.
 
 ## Requisitos no funcionales
 
-- RNF-1: El MVP debe distribuirse como un binario local Rust con pocas
-  dependencias y sin base de datos.
+- RNF-1: El agente debe operar localmente; la memoria e historial usan SQLite
+  como datos derivados por repositorio, sin un servicio de base centralizado.
 - RNF-2: El transporte inicial debe funcionar por stdio/JSON para integrarse
   con herramientas de desarrollo.
 - RNF-3: Ninguna operación de plantilla debe ejecutarse como efecto lateral de
@@ -155,6 +172,20 @@ Excluye:
   `asn --test-mcp`, entonces el agente invoca la herramienta de lectura
   `status`, procesa su resultado y finaliza el ciclo sin disponer de tools de
   escritura; si falla, se identifica la etapa sin imprimir prompts ni secretos.
+- Dado un proveedor OpenAI-compatible que devuelve completions vacías,
+  cuando ASN reintenta el paso, entonces realiza como máximo 12 solicitudes,
+  fuerza `reasoning_effort=low` en los reintentos, usa el fallback de límite de
+  tokens si el endpoint lo exige y sólo retorna cuando hay contenido o tool call.
+- Dada una sesión con historial habilitado, cuando se envían turnos o llamadas
+  al modelo, entonces SQLite guarda sólo turnos visibles y metadatos resumidos,
+  mientras el eval completo continúa en el directorio temporal.
+- Dado un proveedor compatible con embeddings, cuando existe memoria relevante,
+  entonces ASN incluye hasta cinco turnos históricos como referencia y prioriza
+  los de la iniciativa actual. Si el proveedor no ofrece embeddings, la sesión
+  continúa con un aviso y conserva el historial SQL.
+- Dado un JSONL de historial anterior, cuando ASN inicializa la base, entonces
+  importa sus pares de turnos una sola vez. `asn history export` emite JSONL y
+  `asn history clear` borra llamadas, turnos, vectores y el JSONL migrado.
 
 ## Dependencias y riesgos
 
@@ -163,7 +194,9 @@ Excluye:
 - Rust se adopta como dirección preferida, pero la versión exacta y las
   dependencias se fijarán al implementar el MVP.
 - La elección del proveedor de modelo queda abierta; debe probarse con un
-  adaptador mínimo antes de convertirla en decisión persistente.
+  adaptador mínimo antes de convertirla en decisión persistente. El piloto usa
+  `sqlite-vec` como extensión precargable; la búsqueda semántica requiere que el
+  endpoint de chat admita embeddings y su falla sólo desactiva esa búsqueda.
 - La detección de intención debe distinguir con precisión una petición de
   ayuda de una orden explícita de plantilla.
 - Los binarios externos `sops`, `age` y `gopass` son opcionales; sólo se

@@ -15,11 +15,11 @@
 
 ## Infraestructura
 
-- **Persistencia**: archivos del repositorio, principalmente `spec-native/`.
-- **Historial opcional**: JSONL local bajo `.specnative/agent/sessions/`, excluido de Git.
-- **Base de datos**: ninguna.
+- **Persistencia canónica**: archivos del repositorio, principalmente `spec-native/`.
+- **Memoria e historial local**: SQLite bajo `.specnative/agent/memory.sqlite3`, excluido de Git; conserva llamadas resumidas y turnos visibles.
+- **Búsqueda vectorial**: extensión `sqlite-vec` cargada desde Python; los embeddings se solicitan al endpoint compatible configurado.
+- **Eval detallado**: JSONL privado en un directorio temporal; contiene requests/responses completos y duración, sin headers de autenticación.
 - **Hosting**: local; no requerido para el piloto.
-
 ## Integraciones
 
 - **SpecNative MCP**: criticidad alta; expone contexto, lectura, validación y escrituras aprobadas por el controlador.
@@ -27,8 +27,7 @@
 
 ## Restricciones
 
-- Mantener pequeño el controlador y la lista de dependencias.
-- El modelo sólo recibe herramientas de lectura y `propose_change`.
-- Toda escritura requiere confirmación del usuario.
-- La aplicación de plantillas sólo puede iniciar desde `/template <nombre>`.
+- Mantener pequeño el controlador y la lista de dependencias; fijar `sqlite-vec` al rango compatible pre-1.0.
+- La extensión SQLite debe poder cargarse en las plataformas soportadas; si la carga falla, mantener historial SQL y reportar que la búsqueda vectorial no está disponible.
+- No almacenar credenciales ni payloads completos del modelo en SQLite.
 - La propuesta y la política de permisos deben poder portarse a Rig + rmcp.

@@ -406,3 +406,23 @@ completion_evidence = ["`uv run --project pilot pytest -q`: 119 passed. `make do
 ```
 
 Evitar que respuestas exitosas vacías de Groq GPT-OSS consuman pasos smolagents; limitar llamadas por paso y recuperar presupuesto cuando finish_reason indique length.
+
+### TASK-AGENTE-SPECNATIV-0021 - Generalizar recuperación del modelo y agregar memoria SQLite
+
+> **Update 2026-09-27T03:36:53Z:** Implementación iniciada desde el plan aprobado; eval detallado temporal se mantiene separado del historial persistente.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0021"
+title = "Generalizar recuperación del modelo y agregar memoria SQLite"
+state = "done"
+priority = "p1"
+owner = "rafex"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "ASN reintenta respuestas vacías hasta 12 intentos dentro del paso en proveedores OpenAI compatibles usando reasoning_effort=low y fallback max_completion_tokens→max_tokens; mantiene el historial textual serializable. El piloto persiste llamadas (metadatos) y turnos visibles en SQLite por repositorio, importa JSONL idempotentemente, ofrece recuperación vectorial con sqlite-vec priorizando iniciativa y degradación con aviso si embeddings no están disponibles, y permite listar/exportar/borrar historial mediante CLI. Eval completo permanece temporal; docs/spec reflejan que spec-native es la fuente canónica."
+validation = ["Casos simulados de respuesta vacía, finish_reason=length, tool call válida, fallback de tokens y agotamiento de 12 intentos en proveedores compatibles.", "Verificar serialización textual del historial sin reasoning oculto ni tool_call_ids estructurados.", "Pruebas de integración SQLite para persistencia, migración idempotente, recuperación con prioridad de iniciativa, exportación y borrado.", "Simular proveedor sin embeddings y verificar aviso con continuidad de la sesión.", "Ejecutar suite del piloto y build estricto MkDocs."]
+completion_evidence = ["`uv run --project pilot pytest -q`: 130 passed; `make docs`: sitio MkDocs construido; `uv lock --project pilot --check`, compileall y `git diff --check`: correctos; `uv build --project pilot --out-dir /tmp/asn-sqlite-dist`: sdist y wheel creados; SpecNative validate: 15 archivos y referencias válidos. La prueba vectorial ejecutó sqlite-vec real; embeddings/provider externo se simularon."]
+```
+
+Generalizar los reintentos de respuestas vacías a proveedores OpenAI compatibles y agregar memoria e historial local por repositorio con SQLite/sqlite-vec, controles CLI, migración del JSONL existente y documentación.

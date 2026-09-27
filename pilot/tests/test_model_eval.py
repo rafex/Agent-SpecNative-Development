@@ -61,6 +61,29 @@ def test_tracing_client_logs_exact_request_response_effort_and_latency(tmp_path)
     assert event["endpoint"] == "https://api.groq.com/openai/v1"
 
 
+def test_tracing_client_persists_only_call_metadata(tmp_path):
+    metadata = []
+
+    class History:
+        def record_call(self, **kwargs):
+            metadata.append(kwargs)
+
+    class Completions:
+        def create(self, **kwargs):
+            return _Response()
+
+    client = SimpleNamespace(chat=SimpleNamespace(completions=Completions()))
+    log = ModelEvalLog(tmp_path / "eval")
+    traced = TracingOpenAIClient(client, log, "test-model", "https://api.example.test/v1", History())
+    traced.chat.completions.create(model="test-model", messages=[{"role": "user", "content": "private prompt"}])
+
+    assert len(metadata) == 1
+    assert metadata[0]["model"] == "test-model"
+    assert metadata[0]["success"] is True
+    assert "request" not in metadata[0]
+    assert "response" not in metadata[0]
+
+
 def test_tracing_client_does_not_record_auth_headers_and_logs_provider_error(tmp_path):
     token = "secret-test-token"
 

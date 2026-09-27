@@ -25,6 +25,7 @@ class Config:
     secrets_backend: str = "auto"
     secrets_file: Path | None = None
     gopass_file: Path | None = None
+    embedding_model: str | None = None
 
 
 def effective_reasoning_effort(
@@ -100,6 +101,11 @@ def load_config(
         if not isinstance(reasoning_effort, str):
             raise ValueError("[agent].reasoning_effort debe ser texto")
         reasoning_effort = reasoning_effort.strip() or None
+    embedding_model = os.getenv("SPECNATIVE_AGENT_EMBEDDING_MODEL") or agent.get("embedding_model") or None
+    if embedding_model is not None and not isinstance(embedding_model, str):
+        raise ValueError("[agent].embedding_model debe ser texto")
+    if embedding_model is not None:
+        embedding_model = embedding_model.strip() or None
     return Config(
         repo=repo,
         model=os.getenv("SPECNATIVE_AGENT_MODEL", agent.get("model", "")),
@@ -107,11 +113,12 @@ def load_config(
         reasoning_effort=reasoning_effort,
         api_key_env=agent.get("api_key_env", "OPENAI_API_KEY"),
         question_mode=question_mode or os.getenv("SPECNATIVE_AGENT_QUESTION_MODE", agent.get("question_mode", "single")),
-        history=os.getenv("SPECNATIVE_AGENT_HISTORY", str(agent.get("history", False))).lower() in {"1", "true", "yes", "on"},
+        history=os.getenv("SPECNATIVE_AGENT_HISTORY", str(agent.get("history", True))).lower() in {"1", "true", "yes", "on"},
         max_steps=int(agent.get("max_steps", 12)),
         mcp_python=python_path,
         mcp_script=script_path,
         secrets_backend=backend,
         secrets_file=resolved_secrets_file,
         gopass_file=resolved_gopass_file,
+        embedding_model=embedding_model,
     )

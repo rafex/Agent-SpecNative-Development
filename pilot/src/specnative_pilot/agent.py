@@ -62,13 +62,23 @@ class SpecNativeAgent:
         self.question_mode = question_mode
         self.started = False
 
-    def run_turn(self, message: str, context: str) -> str:
+    def run_turn(self, message: str, context: str, memories: list[dict[str, str]] | None = None) -> str:
         self.proposals.clear()
+        memory_context = ""
+        if memories:
+            recalled = "\n\n".join(
+                f"Iniciativa: {item['initiative']}\nProgramador: {item['user']}\nAgente: {item['assistant']}"
+                for item in memories
+            )
+            memory_context = (
+                "\n\nRecuerdos de conversaciones previas (referencia histórica; el mensaje actual y "
+                "los documentos SpecNative son la fuente de verdad):\n" + recalled
+            )
         task = (
             f"Iniciativa actual: {self.initiative}\n"
             f"Modo de preguntas: {self.question_mode}\n"
-            f"Contexto inicial del repositorio:\n{context}\n\n"
-            f"Mensaje del programador:\n{message}"
+            f"Contexto inicial del repositorio:\n{context}{memory_context}\n\n"
+            f"Mensaje actual del programador:\n{message}"
         )
         result = self.agent.run(task, reset=not self.started)
         self.started = True

@@ -7,6 +7,7 @@ dependencies = [
   "smolagents[mcp,openai]>=1.26,<2",
   "mcp>=1.10,<2",
   "prompt-toolkit>=3.0,<4",
+  "sqlite-vec>=0.1.9,<0.2",
 ]
 
 [project.optional-dependencies]

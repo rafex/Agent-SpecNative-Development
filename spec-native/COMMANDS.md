@@ -20,6 +20,15 @@ just batch
 Configura antes `SPECNATIVE_AGENT_MODEL` y `OPENAI_API_KEY`. Para otro endpoint,
 usa `SPECNATIVE_AGENT_API_BASE`.
 
+```bash
+asn history list --repo .
+asn history export --repo . --output /tmp/asn-history.jsonl
+asn history clear --repo .
+```
+
+El historial SQLite local guarda turnos visibles y metadatos de llamadas; el
+eval completo continúa en temporales.
+
 ## Tests
 
 ```bash

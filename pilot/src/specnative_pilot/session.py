@@ -9,7 +9,7 @@ from uuid import uuid4
 from .agent import SpecNativeAgent
 from .config import Config
 from .failure_log import record_failure
-from .history import HistoryStore
+from .history import EmbeddingClient, HistoryStore
 from .intent import parse_template_command
 from .mcp import SpecNativeMcp
 from .model import build_model
@@ -67,6 +67,7 @@ class AgentSession:
         self.owns_mcp = owns_mcp
         self.pending: PendingAction | None = None
         self.closed = False
+        self._memory_warning_reported = False
 
     @classmethod
     def from_mcp(
@@ -84,14 +85,36 @@ class AgentSession:
         spec_path = config.repo / "spec-native" / "specs" / initiative / "SPEC.md"
         context = str(mcp.call("context_snapshot", initiative=initiative if spec_path.exists() else ""))
         agent = SpecNativeAgent(model, mcp, initiative, config.question_mode, config.max_steps)
-        history_path = config.repo / ".specnative" / "agent" / "sessions" / "latest.jsonl" if config.history else None
+        history_path = config.repo / ".specnative" / "agent" / "memory.sqlite3" if config.history else None
+        history = HistoryStore(history_path)
+        if config.history:
+            if config.embedding_model:
+                try:
+                    credentials = resolve_credentials(config)
+                    if credentials.api_key:
+                        history.embedding_client = EmbeddingClient(
+                            api_key=credentials.api_key,
+                            model=config.embedding_model,
+                            base_url=credentials.api_base,
+                        )
+                        history.vector_enabled = True
+                        history.vector_error = None
+                    else:
+                        history.vector_enabled = False
+                        history.vector_error = "Falta API key; la memoria queda disponible sin búsqueda vectorial."
+                except (SecretResolutionError, RuntimeError) as error:
+                    history.vector_enabled = False
+                    history.vector_error = f"No se pudo configurar embeddings ({type(error).__name__}); el historial sigue activo."
+            else:
+                history.vector_enabled = False
+                history.vector_error = "Búsqueda vectorial desactivada; configura [agent].embedding_model o SPECNATIVE_AGENT_EMBEDDING_MODEL."
         return cls(
             session_id or uuid4().hex,
             config,
             initiative,
             mcp,
             agent,
-            HistoryStore(history_path),
+            history,
             owns_mcp,
         ).with_context(context)
 
@@ -150,18 +173,18 @@ class AgentSession:
         message = message.strip()
         if not message:
             raise SessionError("El mensaje no puede estar vacío.")
-        self.history.append("user", initiative=self.initiative, message=message)
         command = parse_template_command(message)
         if command is not None:
             listing = str(self.mcp.call("list_templates", template_type="spec"))
             if command.name is None:
-                return self._result("template_list", listing)
+                return self._complete_turn(message, "template_list", listing)
             names = spec_template_names(listing)
             if command.name not in names:
-                return self._result("template_invalid", f"Plantilla inexistente: {command.name}\n\n{listing}")
+                return self._complete_turn(message, "template_invalid", f"Plantilla inexistente: {command.name}\n\n{listing}")
             token = token_urlsafe(24)
             self.pending = PendingAction(token, "template", self.initiative, template=command.name)
-            return self._result(
+            return self._complete_turn(
+                message,
                 "approval_required",
                 f"Plantilla: {command.name}\nIniciativa: {self.initiative}\nSe creará SPEC.md desde esta plantilla.",
                 approval_token=token,
@@ -169,20 +192,34 @@ class AgentSession:
                 template=command.name,
             )
 
-        response = self.agent.run_turn(message, self.context)
-        self.history.append("agent", initiative=self.initiative, response=response)
+        memories = self.history.recall(message, initiative=self.initiative)
+        response = self.agent.run_turn(message, self.context, memories=memories)
         proposals = tuple(self.agent.proposals)
         if proposals:
             token = token_urlsafe(24)
             self.pending = PendingAction(token, "proposals", self.initiative, proposals=proposals)
-            return self._result(
+            return self._complete_turn(
+                message,
                 "approval_required",
                 response,
                 approval_token=token,
                 action="proposals",
                 proposals=[_proposal_dict(item) for item in proposals],
             )
-        return self._result("question", response, proposals=[])
+        return self._complete_turn(message, "question", response, proposals=[])
+
+    def _complete_turn(self, user_message: str, status: str, text: str, **extra: Any) -> dict[str, Any]:
+        self.history.record_turn(
+            user_message,
+            text,
+            initiative=self.initiative,
+            session_id=self.session_id,
+        )
+        warning = self.history.vector_error if not self._memory_warning_reported else None
+        if warning:
+            self._memory_warning_reported = True
+            extra["memory_warning"] = warning
+        return self._result(status, text, **extra)
 
     def approve(self, token: str) -> dict[str, Any]:
         self._ensure_open()

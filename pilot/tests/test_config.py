@@ -27,6 +27,7 @@ def test_default_mcp_is_bundled_and_does_not_require_agent_root(tmp_path, monkey
 
     assert config.mcp_python is None
     assert config.mcp_script is None
+    assert config.history is True
 
 
 def test_partial_mcp_configuration_is_rejected(tmp_path):
@@ -119,3 +120,12 @@ def test_reasoning_effort_must_be_a_string_in_toml(tmp_path, monkeypatch):
         assert "reasoning_effort" in str(error)
     else:
         raise AssertionError("non-string reasoning_effort should fail")
+
+
+def test_embedding_model_config_uses_environment_precedence(tmp_path, monkeypatch):
+    config_file = tmp_path / "agent.toml"
+    config_file.write_text('[agent]\nembedding_model = "provider-embed"\n', encoding="utf-8")
+    monkeypatch.delenv("SPECNATIVE_AGENT_EMBEDDING_MODEL", raising=False)
+    assert load_config(tmp_path, config_file).embedding_model == "provider-embed"
+    monkeypatch.setenv("SPECNATIVE_AGENT_EMBEDDING_MODEL", "env-embed")
+    assert load_config(tmp_path, config_file).embedding_model == "env-embed"

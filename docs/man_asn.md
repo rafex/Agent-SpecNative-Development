@@ -18,6 +18,8 @@ export SPECNATIVE_AGENT_MODEL="nombre-del-modelo"
 export OPENAI_API_KEY="..."
 # Opcional; usa los valores admitidos por el proveedor, por ejemplo low
 export SPECNATIVE_AGENT_REASONING_EFFORT="low"
+# Opcional; debe existir en el endpoint configurado
+export SPECNATIVE_AGENT_EMBEDDING_MODEL="text-embedding-3-small"
 ```
 
 Al iniciar, `asn` comprueba que el modelo y la API key estén disponibles. Si
@@ -29,6 +31,12 @@ El esfuerzo de razonamiento puede configurarse en `[agent].reasoning_effort` de
 de entorno tiene prioridad. ASN pasa el valor configurado tanto al agente como
 a `asn --test`. Para Groq GPT-OSS, si no se define ASN usa `low`; los demás
 modelos conservan el valor predeterminado del proveedor.
+
+La memoria local está activa por defecto. `embedding_model` configura el modelo
+que produce vectores usando la URL y API key del proveedor de chat. Si ese
+endpoint no ofrece embeddings, la sesión sigue con historial sin búsqueda
+semántica. Para desactivar toda persistencia, configura
+`SPECNATIVE_AGENT_HISTORY=false`.
 
 ```bash
 asn --auth                  # credenciales globales del usuario
@@ -75,6 +83,19 @@ asn --repo . --secrets-backend none
 
 El repositorio debe tener contexto SpecNative válido. `asn` ejecuta el
 preflight antes de iniciar el modelo y termina sin escribir si falla.
+
+## Historial
+
+SQLite conserva metadatos resumidos de llamadas y turnos visibles en
+`.specnative/agent/memory.sqlite3`, fuera de Git. El eval que contiene los
+requests y responses completos sigue en temporales privados.
+
+```bash
+asn history list --repo .
+asn history export --repo . --output /tmp/asn-history.jsonl
+asn history clear --repo .          # solicita confirmación
+asn history clear --repo . --yes     # confirma sin interacción
+```
 
 Antes de iniciar una sesión puedes comprobar la URL, el modelo y el token con:
 

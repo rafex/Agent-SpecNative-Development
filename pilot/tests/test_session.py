@@ -47,7 +47,8 @@ class FakeAgent:
     def __init__(self, *_):
         self.proposals = []
 
-    def run_turn(self, message, context):
+    def run_turn(self, message, context, memories=None):
+        self.memories = memories
         self.proposals = [Proposal("demo", "spec", "Resumen", "content", "rationale", ["SPEC.md"])]
         return f"response: {message}"
 
@@ -72,6 +73,21 @@ def test_message_returns_proposal_without_writing(tmp_path, monkeypatch):
     assert [call[0] for call in current.mcp.calls] == [
         "context_snapshot", "write_spec", "validate", "health_check"
     ]
+
+
+def test_enabled_history_persists_visible_turn_and_reports_embedding_unavailable(tmp_path, monkeypatch):
+    monkeypatch.setattr("specnative_pilot.session.SpecNativeAgent", FakeAgent)
+    current = AgentSession.from_mcp(
+        config(tmp_path, history=True), "demo", FakeMcp(), model_builder=lambda _: object()
+    )
+    result = current.message("idea")
+
+    from specnative_pilot.history import HistoryStore
+
+    records = HistoryStore(tmp_path / ".specnative/agent/memory.sqlite3").list_records()
+    assert records["turns"][0]["user_message"] == "idea"
+    assert records["turns"][0]["assistant_message"] == "response: idea"
+    assert "embedding_model" in result["memory_warning"]
 
 
 def test_reject_does_not_write_and_stale_token_fails(tmp_path, monkeypatch):

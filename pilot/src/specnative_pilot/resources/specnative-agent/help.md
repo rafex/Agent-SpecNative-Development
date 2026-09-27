@@ -55,12 +55,21 @@ MCP configurado. Registra el catálogo real de 20 tools MCP de solo lectura,
 `propose_change` (colector local sin escritura) y `final_answer`; el flujo de
 prueba sólo ejecuta `status` y `final_answer`. Hace llamadas reales al modelo,
 puede consumir cuota y muestra la etapa del error, el número de peticiones y la
-ruta del eval temporal. Si Groq GPT-OSS devuelve una respuesta exitosa vacía,
-ASN repite el mismo paso hasta 12 llamadas totales, sin consumir pasos del
-agente. Usa backoff exponencial de 250 ms hasta 2 s y `reasoning_effort=low`
-en los reintentos; parte de 1024 `max_completion_tokens` y duplica el límite
-cuando `finish_reason=length`, hasta 65 536. Al agotarlos, detiene el turno.
-El campo `reasoning` nunca se usa como respuesta.
+ruta del eval temporal. Si un proveedor OpenAI-compatible devuelve una
+respuesta vacía, ASN repite el mismo paso hasta 12 llamadas totales, sin
+consumir pasos del agente. Usa backoff exponencial de 250 ms hasta 2 s y
+`reasoning_effort=low` en los reintentos; parte de 1024 tokens y duplica el
+límite cuando `finish_reason=length`, hasta 65 536. Si el endpoint rechaza
+`max_completion_tokens`, ASN prueba `max_tokens`. Al agotarlos, detiene el
+turno. El campo `reasoning` nunca se usa como respuesta.
+
+Por defecto, SQLite guarda turnos visibles y metadatos resumidos de llamadas
+por repositorio en `.specnative/agent/memory.sqlite3`; los requests/responses
+completos del eval quedan en temporales privados. Administra los registros con
+`asn history list`, `asn history export` y `asn history clear`. Configura
+`[agent].embedding_model` o `SPECNATIVE_AGENT_EMBEDDING_MODEL` para habilitar
+memoria vectorial con `sqlite-vec`. Si el endpoint no admite embeddings, ASN
+continúa con historial y muestra un aviso.
 
 ## Ayuda de desarrollo
 

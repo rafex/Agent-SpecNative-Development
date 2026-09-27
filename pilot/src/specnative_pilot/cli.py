@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 
 from .config import effective_reasoning_effort, load_config
@@ -17,8 +18,8 @@ from .secrets import SecretResolutionError, credential_setup_message, missing_cr
 def main(preflight_default: bool = False) -> int:
     parser = argparse.ArgumentParser(description="Piloto interactivo de definición SpecNative")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument("command", nargs="?", choices=["setup", "secrets"], help="Acción administrativa del proyecto")
-    parser.add_argument("subcommand", nargs="?", choices=["init"], help="Subcomando administrativo")
+    parser.add_argument("command", nargs="?", choices=["setup", "secrets", "history"], help="Acción administrativa del proyecto")
+    parser.add_argument("subcommand", nargs="?", choices=["init", "list", "export", "clear"], help="Subcomando administrativo")
     parser.add_argument("--repo", type=Path, help="Repositorio destino (por defecto, cwd o su proyecto SpecNative)")
     parser.add_argument("--auth", action="store_true", help="Configura credenciales ASN cifradas con SOPS/age")
     parser.add_argument("--test", action="store_true", help="Valida URL, modelo y token con una petición corta vía curl")
@@ -26,6 +27,8 @@ def main(preflight_default: bool = False) -> int:
     parser.add_argument("--clients", choices=["all", "codex", "claude", "opencode"], default="all")
     parser.add_argument("--backend", choices=["sops", "gopass"], help="Backend para `asn secrets init`")
     parser.add_argument("--prefix", help="Prefijo de referencias para gopass")
+    parser.add_argument("--output", type=Path, help="Destino JSONL de `asn history export` (por defecto stdout)")
+    parser.add_argument("--yes", action="store_true", help="Confirma `asn history clear` sin preguntar")
     parser.add_argument("--initiative")
     parser.add_argument("--config", type=Path)
     parser.add_argument("--question-mode", choices=["single", "batch"])
@@ -91,6 +94,52 @@ def main(preflight_default: bool = False) -> int:
             print("\nRegistra las referencias gopass con:")
             for instruction in instructions:
                 print(f"  {instruction}")
+        return 0
+    if args.command == "history":
+        if args.subcommand not in {"list", "export", "clear"}:
+            parser.error("usa `asn history list|export|clear`")
+        if args.test or args.test_mcp or args.auth:
+            parser.error("`history` no se combina con pruebas ni autenticación")
+        from .history import HistoryStore
+
+        repo = args.repo.resolve() if args.repo else resolve_project_repo(Path.cwd())
+        history = HistoryStore(repo / ".specnative" / "agent" / "memory.sqlite3")
+        if args.subcommand == "list":
+            records = history.list_records()
+            print(f"Llamadas al modelo: {len(records['calls'])}; turnos guardados: {len(records['turns'])}")
+            for call in records["calls"]:
+                status = "ok" if call["success"] else str(call["error_type"] or "error")
+                print(f"{call['timestamp']}  {call['model'] or '?'}  {call['elapsed_ms']:.0f} ms  {status}")
+            for turn in records["turns"]:
+                prompt = turn["user_message"].replace("\n", " ")[:100]
+                print(f"{turn['timestamp']}  {turn['initiative']}  {prompt}")
+            if history.vector_error:
+                print(f"Memoria vectorial: {history.vector_error}")
+            return 0
+        if args.subcommand == "export":
+            content = history.export_jsonl()
+            if args.output:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                descriptor = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                try:
+                    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                        handle.write(content)
+                    os.chmod(args.output, 0o600)
+                except Exception:
+                    try:
+                        os.close(descriptor)
+                    except OSError:
+                        pass
+                    raise
+                print(f"Historial exportado a {args.output}")
+            else:
+                print(content, end="")
+            return 0
+        if not args.yes and input("¿Borrar llamadas, turnos y vectores locales? [s/N] ").strip().lower() not in {"s", "si", "sí", "y", "yes"}:
+            print("Borrado cancelado.")
+            return 0
+        history.clear()
+        print("Historial local borrado.")
         return 0
     if args.subcommand is not None:
         parser.error("el subcomando sólo es válido para `asn secrets init`")

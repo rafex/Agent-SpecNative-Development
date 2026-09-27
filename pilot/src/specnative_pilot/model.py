@@ -22,9 +22,9 @@ _RETRY_INSTRUCTION = (
     "Si corresponde responder directamente, usa la herramienta final_answer."
 )
 _EMPTY_OUTPUT_RETRY_INSTRUCTION = (
-    "La respuesta anterior llegó vacía. Continúa este mismo turno: usa una herramienta "
-    "apropiada del catálogo disponible o, si ya puedes responder, llama final_answer. "
-    "No repitas el razonamiento; devuelve una acción válida."
+    "La respuesta anterior llegó vacía. Continúa este mismo turno y produce una respuesta "
+    "utilizable. Si tienes herramientas disponibles, usa una apropiada o llama final_answer; "
+    "si no tienes herramientas, responde directamente. No repitas el razonamiento."
 )
 _EMPTY_OUTPUT_MAX_ATTEMPTS = 12
 _INITIAL_MAX_COMPLETION_TOKENS = 1024
@@ -140,6 +140,20 @@ def _finish_reason(message: Any) -> str | None:
     return str(value) if value is not None else None
 
 
+def _unsupported_parameter(error: BaseException, parameter: str) -> bool:
+    current: BaseException | None = error
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        message = str(current).casefold()
+        if parameter.casefold() in message and any(
+            marker in message for marker in ("unsupported", "unrecognized", "unknown", "not allowed", "invalid")
+        ):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
 def _is_groq_gpt_oss(model_id: str | None, api_base: str | None) -> bool:
     model_name = (model_id or "").casefold()
     try:
@@ -162,16 +176,17 @@ def tool_call_attempts(error: BaseException) -> int:
 
 
 class OpenAIServerModel(_OpenAIServerModel):
-    """OpenAI-compatible model with one narrowly scoped Groq tool-call retry."""
+    """OpenAI-compatible model with bounded empty-output and Groq tool-call retries."""
 
-    def __init__(self, *args, eval_log: ModelEvalLog | None = None, **kwargs) -> None:
+    def __init__(self, *args, eval_log: ModelEvalLog | None = None, call_history=None, **kwargs) -> None:
         self.eval_log = eval_log or ModelEvalLog()
+        self.call_history = call_history
         super().__init__(*args, **kwargs)
 
     def create_client(self):
         client = super().create_client()
         endpoint = (getattr(self, "client_kwargs", {}) or {}).get("base_url")
-        return TracingOpenAIClient(client, self.eval_log, self.model_id or "", endpoint)
+        return TracingOpenAIClient(client, self.eval_log, self.model_id or "", endpoint, self.call_history)
 
     @property
     def eval_log_path(self):
@@ -297,7 +312,7 @@ class OpenAIServerModel(_OpenAIServerModel):
                 attempts = eval_log.request_count - calls_before if eval_log is not None else 2
                 raise ToolCallRetryExhausted(retry_error, attempts) from retry_error
 
-        if is_groq_with_tools and _is_empty_completion(response):
+        if _is_empty_completion(response):
             retry_messages = _append_empty_output_retry_instruction(messages)
             while _is_empty_completion(response) and attempts < _EMPTY_OUTPUT_MAX_ATTEMPTS:
                 delay = min(
@@ -310,16 +325,38 @@ class OpenAIServerModel(_OpenAIServerModel):
                         max_completion_tokens * 2,
                         _MAX_COMPLETION_TOKENS,
                     )
-                kwargs["max_completion_tokens"] = max_completion_tokens
+                retry_kwargs = dict(kwargs)
+                retry_kwargs.pop("max_tokens", None)
+                retry_kwargs["max_completion_tokens"] = max_completion_tokens
                 with self._retry_with_low_reasoning():
-                    response = super().generate(
-                        retry_messages,
-                        stop_sequences=stop_sequences,
-                        response_format=response_format,
-                        tools_to_call_from=tools_to_call_from,
-                        **kwargs,
-                    )
-                attempts += 1
+                    try:
+                        response = super().generate(
+                            retry_messages,
+                            stop_sequences=stop_sequences,
+                            response_format=response_format,
+                            tools_to_call_from=tools_to_call_from,
+                            **retry_kwargs,
+                        )
+                        attempts += 1
+                    except Exception as error:
+                        attempts += 1
+                        if not _unsupported_parameter(error, "max_completion_tokens") or attempts >= _EMPTY_OUTPUT_MAX_ATTEMPTS:
+                            try:
+                                error.asn_tool_call_attempts = attempts
+                            except Exception:
+                                pass
+                            raise
+                        fallback_kwargs = dict(retry_kwargs)
+                        fallback_kwargs.pop("max_completion_tokens", None)
+                        fallback_kwargs["max_tokens"] = max_completion_tokens
+                        response = super().generate(
+                            retry_messages,
+                            stop_sequences=stop_sequences,
+                            response_format=response_format,
+                            tools_to_call_from=tools_to_call_from,
+                            **fallback_kwargs,
+                        )
+                        attempts += 1
             if _is_empty_completion(response):
                 raise EmptyModelOutputError(attempts, _finish_reason(response))
         return response
@@ -351,9 +388,15 @@ def build_model(config: Config) -> OpenAIServerModel:
         # pseudo-tool call; auto still allows requested MCP tool calls and
         # lets the agent finish with a normal assistant response.
         model_options["tool_choice"] = "auto"
+    from .history import HistoryStore
+
+    call_history = HistoryStore(
+        config.repo / ".specnative" / "agent" / "memory.sqlite3" if config.history else None
+    )
     return OpenAIServerModel(
         model_id=credentials.model,
         api_base=credentials.api_base,
         api_key=credentials.api_key,
+        call_history=call_history,
         **model_options,
     )

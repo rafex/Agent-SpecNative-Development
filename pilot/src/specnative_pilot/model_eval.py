@@ -119,11 +119,30 @@ class ModelEvalLog:
 
 
 class _TracingCompletions:
-    def __init__(self, completions: Any, eval_log: ModelEvalLog, model: str, endpoint: str | None) -> None:
+    def __init__(self, completions: Any, eval_log: ModelEvalLog, model: str, endpoint: str | None, call_history: Any = None) -> None:
         self._completions = completions
         self._eval_log = eval_log
         self._model = model
         self._endpoint = endpoint
+        self._call_history = call_history
+
+    def _record_metadata(self, response: Any, error: BaseException | None, elapsed_ms: float) -> None:
+        if self._call_history is None:
+            return
+        finish_reason = None
+        try:
+            finish_reason = response.choices[0].finish_reason
+        except (AttributeError, IndexError, TypeError):
+            pass
+        self._call_history.record_call(
+            model=self._model,
+            endpoint=_safe_endpoint(self._endpoint),
+            elapsed_ms=elapsed_ms,
+            success=error is None,
+            error_type=type(error).__name__ if error is not None else None,
+            status_code=getattr(error, "status_code", None) if error is not None else getattr(response, "_asn_status_code", None),
+            finish_reason=str(finish_reason) if finish_reason is not None else None,
+        )
 
     def create(self, **request: Any) -> Any:
         request_id = self._eval_log.request_started()
@@ -131,24 +150,28 @@ class _TracingCompletions:
         try:
             response = self._completions.create(**request)
         except Exception as error:
+            elapsed_ms = (time.perf_counter() - started) * 1000
             self._eval_log.record(
                 request_id,
                 request=request,
                 response=getattr(error, "body", None),
                 error=error,
-                elapsed_ms=(time.perf_counter() - started) * 1000,
+                elapsed_ms=elapsed_ms,
                 model=self._model,
                 endpoint=self._endpoint,
             )
+            self._record_metadata(None, error, elapsed_ms)
             raise
+        elapsed_ms = (time.perf_counter() - started) * 1000
         self._eval_log.record(
             request_id,
             request=request,
             response=response,
-            elapsed_ms=(time.perf_counter() - started) * 1000,
+            elapsed_ms=elapsed_ms,
             model=self._model,
             endpoint=self._endpoint,
         )
+        self._record_metadata(response, None, elapsed_ms)
         return response
 
     def __getattr__(self, name: str) -> Any:
@@ -156,9 +179,9 @@ class _TracingCompletions:
 
 
 class _TracingChat:
-    def __init__(self, chat: Any, eval_log: ModelEvalLog, model: str, endpoint: str | None) -> None:
+    def __init__(self, chat: Any, eval_log: ModelEvalLog, model: str, endpoint: str | None, call_history: Any = None) -> None:
         self._chat = chat
-        self.completions = _TracingCompletions(chat.completions, eval_log, model, endpoint)
+        self.completions = _TracingCompletions(chat.completions, eval_log, model, endpoint, call_history)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._chat, name)
@@ -167,9 +190,9 @@ class _TracingChat:
 class TracingOpenAIClient:
     """Delegate to an OpenAI client while tracing chat completion calls only."""
 
-    def __init__(self, client: Any, eval_log: ModelEvalLog, model: str, endpoint: str | None) -> None:
+    def __init__(self, client: Any, eval_log: ModelEvalLog, model: str, endpoint: str | None, call_history: Any = None) -> None:
         self._client = client
-        self.chat = _TracingChat(client.chat, eval_log, model, endpoint)
+        self.chat = _TracingChat(client.chat, eval_log, model, endpoint, call_history)
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._client, name)
