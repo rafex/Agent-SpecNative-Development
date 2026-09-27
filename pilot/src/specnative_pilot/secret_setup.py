@@ -11,7 +11,13 @@ import tempfile
 from pathlib import Path
 from typing import Callable
 
-from .secrets import AGE_IDENTITY_FILE, DEFAULT_GOPASS_FILE, DEFAULT_SOPS_FILE, global_sops_file
+from .secrets import (
+    AGE_IDENTITY_FILE,
+    DEFAULT_GOPASS_FILE,
+    DEFAULT_SOPS_FILE,
+    global_agent_config_file,
+    global_sops_file,
+)
 
 
 class SecretSetupError(RuntimeError):
@@ -151,9 +157,64 @@ def _relative(path: Path, repo: Path) -> str:
         return path.as_posix()
 
 
-def _agent_config(repo: Path, backend: str, target: Path, *, replace_existing: bool = False) -> tuple[Path, bytes]:
+def _upsert_agent_settings(content: str, model: str, api_base: str) -> str:
+    import tomllib
+
+    if content.strip():
+        try:
+            parsed = tomllib.loads(content)
+        except tomllib.TOMLDecodeError as error:
+            raise SecretSetupError("agent.toml: TOML inválido; no se modificó la configuración.") from error
+        if not isinstance(parsed.get("agent", {}), dict):
+            raise SecretSetupError("agent.toml: [agent] debe ser una tabla.")
+
+    lines = content.splitlines(keepends=True)
+    start = next((i for i, line in enumerate(lines) if re.match(r"^\s*\[agent\]\s*(?:#.*)?$", line)), None)
+    if start is None:
+        if content and not content.endswith("\n"):
+            content += "\n"
+        if content.strip():
+            content += "\n"
+        lines = content.splitlines(keepends=True)
+        start = len(lines)
+        lines.extend(("[agent]\n",))
+        end = len(lines)
+    else:
+        end = next(
+            (i for i in range(start + 1, len(lines)) if re.match(r"^\s*\[[^\[][^]]*\]\s*(?:#.*)?$", lines[i])),
+            len(lines),
+        )
+
+    values = {"model": model, "api_base": api_base}
+    replacements = {key: f"{key} = {json.dumps(value, ensure_ascii=False)}\n" for key, value in values.items()}
+    found: set[str] = set()
+    for index in range(start + 1, end):
+        match = re.match(r"^\s*(model|api_base)\s*=.*(?:\n)?$", lines[index])
+        if match:
+            key = match.group(1)
+            lines[index] = replacements[key]
+            found.add(key)
+    additions = [replacements[key] for key in values if key not in found]
+    if additions:
+        insertion = end
+        while insertion > start + 1 and not lines[insertion - 1].strip():
+            insertion -= 1
+        lines[insertion:insertion] = additions
+    return "".join(lines)
+
+
+def _agent_config(
+    repo: Path,
+    backend: str,
+    target: Path,
+    *,
+    replace_existing: bool = False,
+    model: str | None = None,
+    api_base: str | None = None,
+) -> tuple[Path, bytes]:
     path = repo / ".specnative" / "agent.toml"
     original = path.read_text(encoding="utf-8") if path.exists() else ""
+    updated = original
     if original.strip():
         import tomllib
 
@@ -166,33 +227,41 @@ def _agent_config(repo: Path, backend: str, target: Path, *, replace_existing: b
             expected_key = "file" if backend == "sops" else "gopass_file"
             expected = {"backend": backend, expected_key: _relative(target, repo)}
             if all(existing.get(key) == value for key, value in expected.items()):
-                return path, original.encode("utf-8")
-            if not replace_existing:
-                raise SecretSetupError(f"{path}: ya contiene una configuración [secrets] diferente.")
-            block = f'[secrets]\nbackend = "{backend}"\n{expected_key} = "{_relative(target, repo)}"\n'
-            lines = original.splitlines(keepends=True)
-            start = next(index for index, line in enumerate(lines) if line.strip() == "[secrets]")
-            end = next(
-                (
-                    index
-                    for index in range(start + 1, len(lines))
-                    if re.match(r"^\s*\[[^\[][^]]*\]\s*(?:#.*)?$", lines[index])
-                ),
-                len(lines),
-            )
-            updated = "".join(lines[:start]) + block
-            if end < len(lines):
-                if not updated.endswith("\n\n"):
-                    updated += "\n"
-                updated += "".join(lines[end:])
-            return path, updated.encode("utf-8")
-    block_key = "file" if backend == "sops" else "gopass_file"
-    block = f'[secrets]\nbackend = "{backend}"\n{block_key} = "{_relative(target, repo)}"\n'
-    if original and not original.endswith("\n"):
-        original += "\n"
-    if original:
-        original += "\n"
-    return path, (original + block).encode("utf-8")
+                updated = original
+            else:
+                if not replace_existing:
+                    raise SecretSetupError(f"{path}: ya contiene una configuración [secrets] diferente.")
+                block = f'[secrets]\nbackend = "{backend}"\n{expected_key} = "{_relative(target, repo)}"\n'
+                lines = original.splitlines(keepends=True)
+                start = next(index for index, line in enumerate(lines) if line.strip() == "[secrets]")
+                end = next(
+                    (
+                        index
+                        for index in range(start + 1, len(lines))
+                        if re.match(r"^\s*\[[^\[][^]]*\]\s*(?:#.*)?$", lines[index])
+                    ),
+                    len(lines),
+                )
+                updated = "".join(lines[:start]) + block
+                if end < len(lines):
+                    if not updated.endswith("\n\n"):
+                        updated += "\n"
+                    updated += "".join(lines[end:])
+        else:
+            block_key = "file" if backend == "sops" else "gopass_file"
+            block = f'[secrets]\nbackend = "{backend}"\n{block_key} = "{_relative(target, repo)}"\n'
+            updated = original
+            if updated and not updated.endswith("\n"):
+                updated += "\n"
+            if updated:
+                updated += "\n"
+            updated += block
+    else:
+        block_key = "file" if backend == "sops" else "gopass_file"
+        updated = f'[secrets]\nbackend = "{backend}"\n{block_key} = "{_relative(target, repo)}"\n'
+    if model is not None:
+        updated = _upsert_agent_settings(updated, model, api_base or "")
+    return path, updated.encode("utf-8")
 
 
 def _atomic_write(updates: dict[Path, bytes]) -> None:
@@ -217,7 +286,7 @@ def _prompt_sops(
     target: Path,
     input_fn: Callable[[str], str],
     secret_input_fn: Callable[[str], str],
-) -> bytes:
+) -> tuple[bytes, str, str]:
     _require_command("sops")
     _require_command("age")
     model = input_fn("Modelo: ").strip()
@@ -227,11 +296,11 @@ def _prompt_sops(
         raise SecretSetupError("El modelo no puede estar vacío.")
     if not api_key:
         raise SecretSetupError("La API key no puede estar vacía.")
-    payload = json.dumps({"model": model, "api_base": api_base, "api_key": api_key})
+    payload = json.dumps({"api_key": api_key})
     encrypted = _encrypt_sops(payload, target, sops_command=_require_command("sops"), cwd=repo)
     if not encrypted.strip():
         raise SecretSetupError("SOPS no pudo cifrar las credenciales; revisa la configuración de age.")
-    return encrypted.encode("utf-8")
+    return encrypted.encode("utf-8"), model, api_base or "https://api.openai.com/v1"
 
 
 def _gopass_references(repo: Path, prefix: str | None) -> tuple[bytes, list[str]]:
@@ -271,11 +340,13 @@ def initialize_secrets(
         raise SecretSetupError(f"{target} ya existe; no se sobrescribirá.")
 
     instructions: list[str] = []
+    model: str | None = None
+    api_base: str | None = None
     if backend == "sops":
-        content = _prompt_sops(repo, target, input_fn, secret_input_fn)
+        content, model, api_base = _prompt_sops(repo, target, input_fn, secret_input_fn)
     else:
         content, instructions = _gopass_references(repo, prefix)
-    config_path, config_content = _agent_config(repo, backend, target)
+    config_path, config_content = _agent_config(repo, backend, target, model=model, api_base=api_base)
     updates = {target: content}
     if not config_path.exists() or config_path.read_bytes() != config_content:
         updates[config_path] = config_content
@@ -316,9 +387,10 @@ def authenticate(
         raise SecretSetupError("El modelo no puede estar vacío.")
     if not api_key:
         raise SecretSetupError("La API key no puede estar vacía.")
+    api_base = api_base or "https://api.openai.com/v1"
 
     identity, recipient = _age_identity(tools)
-    payload = json.dumps({"model": model, "api_base": api_base, "api_key": api_key})
+    payload = json.dumps({"api_key": api_key})
     encrypted = _encrypt_sops(
         payload,
         target,
@@ -329,8 +401,16 @@ def authenticate(
     if not encrypted.strip():
         raise SecretSetupError("SOPS no devolvió un archivo cifrado.")
     updates = {target: encrypted.encode("utf-8")}
-    if config_update is not None:
-        updates[config_update[0]] = config_update[1]
+    if project is not None:
+        config_update = _agent_config(
+            project, "sops", target, replace_existing=True, model=model, api_base=api_base
+        )
+    else:
+        config_path = global_agent_config_file()
+        original = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+        updated = _upsert_agent_settings(original, model, api_base)
+        config_update = (config_path, updated.encode("utf-8"))
+    updates[config_update[0]] = config_update[1]
     if project is None:
         target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         os.chmod(target.parent, 0o700)

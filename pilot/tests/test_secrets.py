@@ -32,7 +32,7 @@ def test_environment_is_legacy_fallback(tmp_path, monkeypatch):
     assert credentials.api_key == "env-key"
 
 
-def test_sops_provider_overrides_environment_without_writing_plaintext(tmp_path, monkeypatch):
+def test_environment_model_overrides_legacy_sops_model(tmp_path, monkeypatch):
     secret_file = tmp_path / ".specnative/agent.secrets.yaml"
     secret_file.parent.mkdir()
     secret_file.write_text("encrypted", encoding="utf-8")
@@ -47,7 +47,7 @@ def test_sops_provider_overrides_environment_without_writing_plaintext(tmp_path,
     monkeypatch.setattr("specnative_pilot.secrets.shutil.which", lambda name: f"/bin/{name}")
     monkeypatch.setattr("specnative_pilot.secrets.subprocess.run", fake_run)
     credentials = resolve_credentials(load_config(tmp_path))
-    assert credentials.model == "sops-model"
+    assert credentials.model == "env-model"
     assert credentials.api_base == "https://sops"
     assert credentials.api_key == "sops-key"
     assert commands[0][:2] == ["/bin/sops", "decrypt"]
@@ -115,7 +115,7 @@ def test_global_sops_is_used_when_project_has_no_secret_file(tmp_path, monkeypat
     monkeypatch.setattr("specnative_pilot.secrets.shutil.which", lambda name: f"/bin/{name}")
     monkeypatch.setattr("specnative_pilot.secrets.subprocess.run", fake_run)
     credentials = resolve_credentials(load_config(tmp_path))
-    assert credentials.model == "global-model"
+    assert credentials.model == "env-model"
     assert credentials.api_key == "global-key"
     assert calls[0][-1] == str(global_file)
 
@@ -238,7 +238,7 @@ def test_auth_creates_global_sops_file_and_age_identity(tmp_path, monkeypatch):
     )
     target = global_sops_file()
     assert not cancelled
-    assert changed == [target]
+    assert changed == [target, global_sops_file().parent / "agent.toml"]
     assert target.read_text(encoding="utf-8") == "sops: encrypted output\n"
     assert "api-secret" not in target.read_text(encoding="utf-8")
     assert identity.read_text(encoding="utf-8") == "AGE-SECRET-KEY-test\n"
@@ -306,7 +306,7 @@ def test_auth_replaces_existing_global_file_after_confirmation(tmp_path, monkeyp
         secret_input_fn=lambda _: "key",
     )
     assert not cancelled
-    assert changed == [global_file]
+    assert changed == [global_file, global_file.parent / "agent.toml"]
     assert global_file.read_text(encoding="utf-8") == "new encrypted data\n"
 
 

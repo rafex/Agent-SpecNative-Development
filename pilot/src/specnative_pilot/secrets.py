@@ -47,6 +47,11 @@ def global_sops_file() -> Path:
     return config_home / GLOBAL_SOPS_FILE
 
 
+def global_agent_config_file() -> Path:
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config").expanduser()
+    return config_home / "asn" / "agent.toml"
+
+
 def _sops_environment() -> dict[str, str] | None:
     if not AGE_IDENTITY_FILE.is_file():
         return None
@@ -164,12 +169,16 @@ def resolve_credentials(config: Config) -> ResolvedCredentials:
     elif provider == "global_sops":
         values = _read_sops(global_sops_file(), config.repo)
 
-    model = _require_string(values.get("model"), "model", provider) or config.model
-    api_base = (
-        _require_string(values.get("api_base"), "api_base", provider)
-        or os.getenv("SPECNATIVE_AGENT_API_BASE")
-        or config.api_base
-    )
+    # Model and endpoint are ordinary configuration. Prefer the resolved
+    # global/project TOML and environment values; encrypted legacy files remain
+    # a fallback so existing installations keep working until migrated.
+    model = config.model
+    if not model:
+        model = _require_string(values.get("model"), "model", provider) or ""
+    if config.api_base is not None:
+        api_base = config.api_base or None
+    else:
+        api_base = _require_string(values.get("api_base"), "api_base", provider)
     if provider in {"sops", "gopass", "global_sops"}:
         api_key = _require_string(values.get("api_key"), "api_key", provider, required=True)
     else:
@@ -191,6 +200,6 @@ def credential_setup_message(missing: list[str], api_key_env: str = "OPENAI_API_
     return (
         f"Faltan credenciales ASN: {required}. Puedes exportarlas en el entorno del usuario/sistema "
         f"(SPECNATIVE_AGENT_MODEL y {api_key_env}; SPECNATIVE_AGENT_API_BASE es opcional), "
-        "o ejecutar `asn --auth` para guardarlas cifradas con SOPS/age. "
+        "o ejecutar `asn --auth` para guardar modelo y endpoint en TOML y cifrar la API key con SOPS/age. "
         "Para credenciales de un proyecto usa `asn --auth --repo <ruta>`."
     )

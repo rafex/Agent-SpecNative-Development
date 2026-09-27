@@ -64,7 +64,8 @@ no ejecutan herramientas en paralelo.
 
 Groq [documenta tool use en todos sus modelos alojados](https://console.groq.com/docs/tool-use/overview).
 Configura cualquier ID de chat del catálogo con `asn --auth` o
-`SPECNATIVE_AGENT_MODEL`; `asn models` consulta los IDs actuales, y `asn --test`
+`[agent].model` en el archivo global o del proyecto; `SPECNATIVE_AGENT_MODEL`
+puede sobrescribirlo. `asn models` consulta los IDs actuales, y `asn --test`
 verifica que el modelo escogido devuelva el tool call requerido. El listado del
 endpoint puede contener modelos de modalidades que no sirven como modelo
 conversacional.

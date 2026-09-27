@@ -67,7 +67,7 @@ def main(preflight_default: bool = False) -> int:
             print("Autenticación cancelada; no se modificó ningún archivo.")
             return 0
         scope = f"el proyecto {args.repo.resolve()}" if args.repo else "tu usuario"
-        print(f"Credenciales ASN cifradas para {scope}.")
+        print(f"API key cifrada y configuración ASN actualizada para {scope}.")
         for path in changed:
             print(f"- {path}")
         return 0

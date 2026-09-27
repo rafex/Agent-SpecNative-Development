@@ -543,3 +543,23 @@ completion_evidence = ["`pilot/.venv/bin/python -m compileall -q pilot/src`, `ma
 ```
 
 Permitir usar cualquier modelo de chat de Groq compatible con tool calling, aplicar opciones del proveedor a todos los modelos Groq cuando correspondan y mantener únicamente las adaptaciones de protocolo/reasoning limitadas a GPT-OSS. Aclarar la selección de IDs mediante `asn models` y configuración.
+
+### TASK-AGENTE-SPECNATIV-0028 - Separar modelo y endpoint de las credenciales cifradas
+
+> **Update 2026-09-27T16:47:21Z:** Implementando modelo/API base como configuración TOML con precedencia global y de proyecto, y limitando el cifrado SOPS a la API key.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0028"
+title = "Separar modelo y endpoint de las credenciales cifradas"
+state = "done"
+priority = "p1"
+owner = "dev"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "El modelo y el endpoint se pueden cambiar en la configuración global o del repositorio sin cambiar la API key guardada; SOPS sólo recibe api_key en nuevas escrituras; los archivos legacy con model/api_base siguen siendo fallback si no hay configuración equivalente."
+validation = ["Revisar resolución de precedencia env > configuración de proyecto > configuración global > valores legacy cifrados para modelo y endpoint; API key continúa viniendo del backend de secretos.", "Ejecutar compileall, construir documentación MkDocs y git diff --check."]
+completion_evidence = ["`python3 -m compileall -q pilot/src`, `make docs` y `git diff --check` correctos. `asn --auth` y `asn secrets init --backend sops` ahora dejan model/api_base en el TOML del proyecto; el flujo global usa `${XDG_CONFIG_HOME:-~/.config}/asn/agent.toml`. Nuevos archivos SOPS sólo guardan api_key. La resolución aplica entorno > TOML del proyecto > TOML global > campos legacy cifrados, y las claves API permanecen en backend de secretos."]
+```
+
+Permitir seleccionar modelo y API base mediante configuración global o del repositorio sin volver a autenticar. Guardar el modelo y endpoint en agent.toml y cifrar sólo la API key con SOPS; priorizar env y TOML sobre metadatos legacy cifrados para mantener compatibilidad.

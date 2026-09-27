@@ -44,14 +44,28 @@ asn --auth --repo .
 ```
 
 ASN solicita el modelo, la API base opcional y la API key de forma oculta. Con
-SOPS/age, la credencial cifrada se guarda en el ámbito elegido y el texto claro
-se conserva sólo en memoria. Si no quieres usar SOPS, puedes exportar
+SOPS/age, el modelo y la API base se guardan en TOML y sólo la API key se cifra
+en el ámbito elegido. Después puedes cambiar el modelo editando
+`.specnative/agent.toml`, sin volver a autenticarte. Si no quieres usar SOPS,
+puedes exportar
 `SPECNATIVE_AGENT_MODEL` y `OPENAI_API_KEY`; usa
 `SPECNATIVE_AGENT_API_BASE` para un endpoint alternativo.
 
 Para Groq, configura como modelo cualquier ID de chat disponible en el
 catálogo que admita tool calling. `asn models` consulta el catálogo autenticado;
-elige el ID exacto y configúralo con `asn --auth` o `SPECNATIVE_AGENT_MODEL`.
+elige el ID exacto y configúralo en `[agent].model` o con
+`SPECNATIVE_AGENT_MODEL`.
+Para editarlo a mano, usa el archivo global `~/.config/asn/agent.toml` o el
+archivo del proyecto `.specnative/agent.toml`:
+
+```toml
+[agent]
+model = "qwen/qwen3.8-27b"
+api_base = "https://api.groq.com/openai/v1"
+```
+
+La variable de entorno prevalece sobre ambos archivos; el archivo del proyecto
+prevalece sobre el global. La API key se conserva en el backend de secretos.
 `asn models` informa disponibilidad del ID, pero la llamada a `asn --test`
 confirma que ese modelo acepte tool calling requerido.
 
@@ -64,8 +78,10 @@ tool calling nativo. Sólo GPT-OSS en Groq usa una acción JSON estricta y despa
 local, porque esa combinación evita mezclar Structured Outputs estrictos con
 tools nativas en una llamada.
 
-Las credenciales del proyecto tienen prioridad sobre las globales y las
-variables de entorno. Para usar gopass, inicializa las referencias y sigue las
+Para el modelo y endpoint, el entorno tiene prioridad sobre la configuración
+del proyecto y luego la global. Para la API key, ASN busca primero los secretos
+del proyecto, luego los globales y finalmente la variable de entorno. Para usar
+gopass, inicializa las referencias y sigue las
 instrucciones que imprime ASN:
 
 ```bash

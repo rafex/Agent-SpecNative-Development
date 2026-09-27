@@ -6,7 +6,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .mcp_discovery import find_local_mcp
-from .secrets import DEFAULT_GOPASS_FILE, DEFAULT_SOPS_FILE, SECRET_BACKENDS
+from .secrets import (
+    DEFAULT_GOPASS_FILE,
+    DEFAULT_SOPS_FILE,
+    SECRET_BACKENDS,
+    global_agent_config_file,
+)
 
 
 @dataclass(frozen=True)
@@ -55,12 +60,23 @@ def load_config(
     secrets_file: Path | None = None,
     gopass_file: Path | None = None,
 ) -> Config:
-    raw: dict = {}
-    path = config_path or repo / ".specnative" / "agent.toml"
-    if path.exists():
+    def read_toml(path: Path) -> dict:
+        if not path.is_file():
+            return {}
         with path.open("rb") as handle:
-            raw = tomllib.load(handle)
-    agent = raw.get("agent", {})
+            return tomllib.load(handle)
+
+    path = config_path or repo / ".specnative" / "agent.toml"
+    global_raw = read_toml(global_agent_config_file())
+    raw = read_toml(path)
+    global_agent = global_raw.get("agent", {})
+    local_agent = raw.get("agent", {})
+    if not isinstance(global_agent, dict) or not isinstance(local_agent, dict):
+        raise ValueError("[agent] debe ser una tabla")
+    # Shared user defaults, then repository-specific overrides. Empty example
+    # fields are placeholders and must not hide a global setting.
+    agent = dict(global_agent)
+    agent.update({key: value for key, value in local_agent.items() if key not in {"model", "api_base"} or value})
     mcp = raw.get("mcp", {})
     secrets = raw.get("secrets", {})
     if not isinstance(secrets, dict):
@@ -116,10 +132,16 @@ def load_config(
         service_tier = service_tier.strip().lower() or None
         if service_tier not in {None, "auto", "on_demand", "flex", "performance"}:
             raise ValueError("[agent].service_tier debe ser auto, on_demand, flex o performance")
+    model = os.getenv("SPECNATIVE_AGENT_MODEL", agent.get("model", ""))
+    api_base = os.getenv("SPECNATIVE_AGENT_API_BASE") or agent.get("api_base")
+    if not isinstance(model, str):
+        raise ValueError("[agent].model debe ser texto")
+    if api_base is not None and not isinstance(api_base, str):
+        raise ValueError("[agent].api_base debe ser texto")
     return Config(
         repo=repo,
-        model=os.getenv("SPECNATIVE_AGENT_MODEL", agent.get("model", "")),
-        api_base=os.getenv("SPECNATIVE_AGENT_API_BASE", agent.get("api_base")) or None,
+        model=model.strip(),
+        api_base=api_base.strip() if isinstance(api_base, str) and api_base.strip() else None,
         reasoning_effort=reasoning_effort,
         api_key_env=agent.get("api_key_env", "OPENAI_API_KEY"),
         question_mode=question_mode or os.getenv("SPECNATIVE_AGENT_QUESTION_MODE", agent.get("question_mode", "single")),

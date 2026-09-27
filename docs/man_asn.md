@@ -58,10 +58,13 @@ asn --auth                  # credenciales globales del usuario
 asn --auth --repo .         # credenciales para el proyecto actual
 ```
 
-El asistente solicita el modelo, una API base opcional y una API key oculta, y
-cifra los valores con SOPS/age. Las credenciales globales viven en
-`${XDG_CONFIG_HOME:-~/.config}/asn/agent.secrets.yaml`; las de proyecto, en
-`.specnative/agent.secrets.yaml`. La identidad age se crea una vez en
+El asistente solicita el modelo, una API base opcional y una API key oculta.
+Guarda el modelo y el endpoint en texto claro en `agent.toml`; sólo la API key
+se cifra con SOPS/age. La configuración global vive en
+`${XDG_CONFIG_HOME:-~/.config}/asn/agent.toml`, junto con la clave cifrada en
+`agent.secrets.yaml`; la configuración de proyecto vive en
+`.specnative/agent.toml` y `.specnative/agent.secrets.yaml`. La identidad age
+se crea una vez en
 `~/.age/asn-key.txt` con permisos privados. Si ya existe un archivo cifrado,
 ASN pide confirmación antes de reemplazarlo.
 
@@ -152,8 +155,13 @@ asn models --repo /ruta/al/proyecto
 ```
 
 Para cambiar de modelo, copia el ID que quieras usar del catálogo y configúralo
-con `asn --auth` o `SPECNATIVE_AGENT_MODEL`. ASN no mantiene una lista fija de
-IDs. El catálogo puede incluir modelos no conversacionales; `asn --test`
+con `[agent].model` en `~/.config/asn/agent.toml` para el usuario o
+`.specnative/agent.toml` para el repositorio. `SPECNATIVE_AGENT_MODEL` también
+lo sobrescribe; `SPECNATIVE_AGENT_API_BASE` y `[agent].api_base` eligen el
+endpoint. El entorno prevalece sobre el TOML, y la configuración del proyecto
+prevalece sobre la global. No necesitas volver a autenticar: la API key se
+mantiene en SOPS. ASN no mantiene una lista fija de IDs. El catálogo puede incluir modelos
+no conversacionales; `asn --test`
 comprueba que el ID seleccionado responda a una llamada requerida a herramienta.
 
 ASN envía un `GET` autenticado a `/models` usando el mismo endpoint y

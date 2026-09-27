@@ -51,8 +51,10 @@ confirmación explícita. Mencionarlas en una conversación normal no las ejecut
 
 ## Configuración y errores
 
-Si falta el modelo o la credencial, configura `SPECNATIVE_AGENT_MODEL` y
-`OPENAI_API_KEY`, o ejecuta `asn --auth`. Para endpoints compatibles alternativos,
+Si falta el modelo o la credencial, configura `[agent].model` y `api_key_env` en
+`agent.toml`, o usa `SPECNATIVE_AGENT_MODEL` y `OPENAI_API_KEY`. Ejecuta
+`asn --auth` para guardar modelo y endpoint en TOML y cifrar sólo la API key.
+Para endpoints compatibles alternativos,
 configura también `SPECNATIVE_AGENT_API_BASE`.
 
 Cada sesión conserva un eval local temporal con el cuerpo completo de cada
