@@ -474,7 +474,7 @@ Agregar `asn models` para enviar GET /models al endpoint configurado con la mism
 ```toml
 id = "TASK-AGENTE-SPECNATIV-0024"
 title = "Recuperar turnos fallidos y aprobar propuestas con MCP compatible"
-state = "in_progress"
+state = "done"
 priority = "p1"
 owner = "dev"
 labels = []
@@ -482,6 +482,7 @@ dependencies = []
 expected_files = []
 close_criteria = "La sesión no termina por un fallo de generación ni por un fallo de aprobación. /retry, /edit, /skip, /approve, /reject y /model mantienen el estado correcto; el modelo activo se muestra al iniciar y al consultar. Las aprobaciones usan MCP del proyecto si soporta escrituras o el MCP incluido con ASN en caso contrario, sólo tras aprobación explícita."
 validation = ["Pruebas unitarias de recuperación, persistencia de estado en RAM y fallback MCP; suite del paquete pasa.", "Verificar documentación de comandos y que ASN instalado reporte el hash publicado."]
+completion_evidence = ["Implementado en 9e9c522971ff0e1eee6c3ec481bd525da42e49c5 y publicado. ASN conserva el mensaje fallido, permite /retry /edit /skip, conserva aprobaciones para /approve /reject y presenta el modelo cargado; el fallback de escritura sólo se ejecuta tras aprobación explícita y no se expone al modelo. 115 pruebas fuera de tests/test_model.py pasaron; MkDocs --strict y compileall pasaron. La suite completa conserva 8 fallos preexistentes en tests/test_model.py: los fixtures manuales no inicializan custom_role_conversions; model.py no fue modificado."]
 ```
 
 Mantener ASN interactivo tras agotar reintentos del modelo, permitir reintentar/editar/omitir el mensaje en RAM, mostrar modelo activo y completar escrituras aprobadas usando el MCP incluido cuando el MCP del proyecto no ofrezca write_spec/write_tasks.
