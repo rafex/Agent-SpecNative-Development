@@ -80,6 +80,10 @@ def test_build_model_defaults_groq_gpt_oss_to_low(monkeypatch):
 
     assert captured["reasoning_effort"] == "low"
     assert captured["tool_choice"] == "auto"
+    assert captured["extra_body"] == {
+        "include_reasoning": False,
+        "disable_tool_validation": True,
+    }
 
 
 def test_build_model_leaves_tool_choice_default_for_other_providers(monkeypatch):

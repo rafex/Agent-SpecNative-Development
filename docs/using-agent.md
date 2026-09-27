@@ -47,7 +47,17 @@ exponencial de 250 ms hasta 2 s y `reasoning_effort=low` en los reintentos; part
 de 1024 tokens y duplica el límite sólo con `finish_reason=length`, hasta
 65 536. Si el endpoint rechaza `max_completion_tokens`, reintenta con
 `max_tokens`. Al agotar intentos, detiene el turno con un error explícito.
-Nunca usa el campo `reasoning` como respuesta.
+Para Groq GPT-OSS, ASN envía `include_reasoning=false` en las solicitudes para
+que las respuestas traigan el contenido utilizable o la llamada a herramienta,
+en lugar del canal `reasoning` interno. En los turnos siguientes reconstruye
+las llamadas y observaciones MCP como mensajes OpenAI `assistant.tool_calls` y
+`tool` con sus IDs; smolagents conserva su formato interno de memoria. ASN
+normaliza la pseudo-herramienta `json` sólo cuando trae exactamente un campo
+`answer` de texto, tratándola como `final_answer`. Nunca usa el campo
+`reasoning` como respuesta ni ejecuta una herramienta fuera del catálogo local.
+Para este modelo, ASN también usa un prompt de herramientas compacto y envía un
+resumen del estado en vez del volcado de todas las plantillas SpecNative; el
+contexto detallado sigue disponible mediante las herramientas MCP de lectura.
 
 Cada sesión escribe un eval JSONL bajo una carpeta privada del directorio
 temporal del sistema. La CLI muestra la ruta al iniciar; `agent_session_start`

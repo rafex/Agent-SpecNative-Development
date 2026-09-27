@@ -45,6 +45,32 @@ si no quieres que queden en el historial local.
 
 ## Ciclo de una conversación
 
+El proceso tiene dos trazas con propósitos distintos: SQLite guarda un resumen
+operativo persistente y el eval temporal conserva el intercambio completo con el
+proveedor para depurar. Los turnos visibles se persisten al completar una
+respuesta; las llamadas se registran una por cada request, incluidos los
+reintentos y errores.
+
+```mermaid
+flowchart LR
+    Dev[Programador] -->|mensaje| ASN[ASN / smolagents]
+    ASN -->|lee contexto| MCP[SpecNative MCP]
+    MCP --> Docs[spec-native/ canónico]
+    ASN -->|prompt / tool calls| LLM[Endpoint OpenAI compatible]
+    LLM -->|texto / tool call / error| ASN
+    ASN -->|metadatos por request| Calls[(SQLite calls)]
+    ASN -->|turno visible| Turns[(SQLite turns)]
+    ASN -->|request + response + duración| Eval[JSONL temporal privado]
+    ASN -. embeddings opcionales .-> Embed[Endpoint de embeddings]
+    Embed -. vector .-> Vec[(sqlite-vec memory_vectors)]
+    Vec -. IDs similares .-> Turns
+    Turns -->|recuerdos relevantes| ASN
+```
+
+Este diagrama resume la persistencia; la secuencia temporal completa se muestra
+abajo. La variante de componentes también tiene fuente D2 para regenerar el SVG
+incluido.
+
 ```mermaid
 sequenceDiagram
     actor Usuario
@@ -81,6 +107,31 @@ sequenceDiagram
 Los resultados recuperados son referencias de conversaciones previas. ASN los
 añade al contexto para orientar la continuidad, mientras las instrucciones
 actuales y los documentos SpecNative conservan su autoridad.
+
+### Qué se guarda por llamada
+
+El envoltorio de transporte registra una fila en `calls` por cada petición al
+endpoint de chat. Los reintentos aparecen como llamadas distintas; de este modo
+se puede comparar su duración, resultado, estado HTTP y `finish_reason`. El
+endpoint se sanitiza para quitar credenciales, parámetros de consulta y
+fragmentos. Esta tabla **no** guarda el prompt ni el cuerpo completo de la
+respuesta.
+
+La traza JSONL temporal sí conserva request y response completos, además del
+tiempo transcurrido, para evaluar fallos del modelo. Se crea con permisos
+privados bajo `/tmp/asn-eval-*`; puede incluir el prompt, el contexto del
+repositorio y datos escritos en la conversación. Separa esa traza de los datos
+que necesitas conservar y bórrala cuando termines de diagnosticar.
+
+El historial queda habilitado por defecto. Para desactivarlo en una ejecución:
+
+```bash
+SPECNATIVE_AGENT_HISTORY=false asn --repo .
+```
+
+O configura `history = false` en `[agent]` dentro de
+`.specnative/agent.toml`. La desactivación evita crear el historial SQLite de
+esa sesión; los eval temporales de las llamadas siguen siendo independientes.
 
 ## Cómo funciona `sqlite-vec`
 
@@ -154,11 +205,12 @@ mensajes visibles a `turns` y registra en `metadata` que la migración ya se
 ejecutó, para no repetirla en cada inicio. Los archivos eval de diagnóstico no
 son esa fuente de migración.
 
-## Vista de componentes en D2
+## Diagramas Mermaid y D2
 
-El siguiente diagrama se genera desde el archivo fuente D2 versionado. El SVG
-se incluye en el sitio para que la compilación de MkDocs no dependa de tener D2
-instalado:
+Los diagramas de secuencia, componentes y esquema usan bloques Mermaid que
+MkDocs Material renderiza en esta página. El diagrama de componentes también se
+mantiene como fuente D2 versionada y su SVG se incluye para que el sitio no
+dependa de tener D2 instalado al construirlo:
 
 ![Componentes del historial SQLite y sqlite-vec](diagrams/sqlite-history.svg)
 

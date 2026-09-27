@@ -426,3 +426,22 @@ completion_evidence = ["`uv run --project pilot pytest -q`: 130 passed; `make do
 ```
 
 Generalizar los reintentos de respuestas vacías a proveedores OpenAI compatibles y agregar memoria e historial local por repositorio con SQLite/sqlite-vec, controles CLI, migración del JSONL existente y documentación.
+
+### TASK-AGENTE-SPECNATIV-0022 - Endurecer GPT-OSS en Groq y documentar persistencia SQLite
+
+> **Update 2026-09-27T04:47:17Z:** Completando compatibilidad del agente Groq GPT-OSS y actualización de guía operativa/SQLite antes de instalar y publicar.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0022"
+title = "Endurecer GPT-OSS en Groq y documentar persistencia SQLite"
+state = "in_progress"
+priority = "p1"
+owner = "rafex"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "La petición real de inicio del portal devuelve una respuesta utilizable o una pregunta segura sin agotar reintentos; asn --test y asn --test-mcp completan con la instalación local; la documentación MkDocs explica qué persiste en SQLite y qué queda en eval temporal, incluye diagramas Mermaid y D2; el cambio está publicado en Git."
+validation = ["Ejecutar asn --version, asn --test y asn --test-mcp contra la configuración local sin mostrar la credencial.", "Reproducir el prompt adjunto a través de AgentSession y comprobar respuesta utilizable sin modificar archivos del repositorio portal-captive.", "Construir el sitio MkDocs y revisar git diff --check."]
+```
+
+Completar la integración estructurada de tool calling y continuación para Groq GPT-OSS, instalar esta revisión en la máquina local, configurar ASN para uso y ampliar la documentación MkDocs sobre memoria e historial SQLite/sqlite-vec con diagramas Mermaid y D2.

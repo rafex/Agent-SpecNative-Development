@@ -112,6 +112,12 @@ def _prepare_request(credentials: ResolvedCredentials, reasoning_effort: str | N
     }
     if reasoning_effort:
         payload["reasoning_effort"] = reasoning_effort
+    try:
+        groq_endpoint = (urlsplit(credentials.api_base or "").hostname or "").casefold() == "api.groq.com"
+    except ValueError:
+        groq_endpoint = False
+    if groq_endpoint and credentials.model.casefold().startswith("openai/gpt-oss-"):
+        payload["include_reasoning"] = False
     url = _chat_completions_url(credentials.api_base)
     body = json.dumps(payload, ensure_ascii=False, indent=2)
     curl_config = "\n".join(

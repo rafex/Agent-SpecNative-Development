@@ -83,7 +83,24 @@ class AgentSession:
             raise SessionError("Debes indicar una iniciativa.")
         model = model_builder(config)
         spec_path = config.repo / "spec-native" / "specs" / initiative / "SPEC.md"
-        context = str(mcp.call("context_snapshot", initiative=initiative if spec_path.exists() else ""))
+        groq_gpt_oss = getattr(model, "_is_groq_gpt_oss", None)
+        if callable(groq_gpt_oss) and groq_gpt_oss():
+            status = str(mcp.call("status"))
+            if spec_path.exists():
+                initiative_context = str(mcp.call("read_spec", initiative=initiative))
+                context = (
+                    f"Repositorio SpecNative validado. Estado: {status}\n"
+                    f"Spec vigente de {initiative}:\n{initiative_context}\n"
+                    "Consulta los documentos canónicos y decisiones con herramientas MCP de lectura cuando sean pertinentes."
+                )
+            else:
+                context = (
+                    f"Repositorio SpecNative validado. Estado: {status}\n"
+                    f"No existe todavía SPEC.md para {initiative}. No inventes decisiones del producto; "
+                    "consulta PRODUCT, ROADMAP o decisiones con herramientas MCP de lectura si son necesarias."
+                )
+        else:
+            context = str(mcp.call("context_snapshot", initiative=initiative if spec_path.exists() else ""))
         agent = SpecNativeAgent(model, mcp, initiative, config.question_mode, config.max_steps)
         history_path = config.repo / ".specnative" / "agent" / "memory.sqlite3" if config.history else None
         history = HistoryStore(history_path)

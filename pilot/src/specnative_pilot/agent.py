@@ -34,9 +34,13 @@ SYSTEM_INSTRUCTIONS = """Eres un agente especializado en definir software con Sp
 Reglas obligatorias:
 - Ayuda a aclarar una idea mediante preguntas sobre problema, usuarios, objetivo,
   alcance, requisitos, criterios de aceptación, riesgos y dependencias.
-- Si faltan datos, pregunta; no inventes decisiones importantes.
+- Si faltan datos, llama `final_answer` con una pregunta breve; no inventes decisiones importantes.
 - Usa sólo las herramientas de lectura disponibles para consultar el contexto.
 - Nunca intentes escribir archivos ni aplicar plantillas.
+- Para ejercicios que imiten páginas de acceso de servicios reales, guía el diseño
+  hacia una marca ficticia y no recolectes credenciales de terceros. No solicites
+  detalles para copiar logotipos, identidad ni flujos de inicio de sesión de una
+  marca real; explica la alternativa ficticia y pregunta si la acepta.
 - Cuando haya suficiente información, llama propose_change una vez para SPEC.md
   y una vez para TASKS.md. El contenido debe ser completo y válido, incluyendo
   los bloques TOML y los encabezados requeridos.
@@ -44,6 +48,63 @@ Reglas obligatorias:
   pequeño de preguntas.
 - No implementes código ni uses herramientas de ejecución de código.
 """
+
+GROQ_GPT_OSS_SYSTEM_PROMPT = """Eres el agente ASN para definir iniciativas SpecNative.
+Resuelve una sola acción por llamada usando una herramienta del catálogo. Si falta
+información, llama `final_answer` con una pregunta breve y concreta; no propongas
+SPEC ni TASKS incompletas. Cuando haya datos suficientes, consulta con las
+herramientas de lectura PRODUCT, ROADMAP y decisiones pertinentes; luego llama
+`propose_change` para proponer SPEC.md y TASKS.md. Esa herramienta sólo prepara
+propuestas y el usuario debe aprobarlas antes de cualquier escritura.
+No inventes decisiones importantes. Nunca escribas archivos ni llames herramientas
+que no estén en el catálogo. Después de recibir una observación MCP, continúa con
+una herramienta o responde mediante `final_answer`.
+
+Herramientas disponibles:
+{%- for tool in tools.values() %}
+- {{ tool.to_tool_calling_prompt() }}
+{%- endfor %}
+
+{{ custom_instructions }}
+"""
+
+
+GROQ_GPT_OSS_PROMPT_TEMPLATES = {
+    "system_prompt": GROQ_GPT_OSS_SYSTEM_PROMPT,
+    "planning": {
+        "initial_plan": "{{task}}",
+        "update_plan_pre_messages": "{{task}}",
+        "update_plan_post_messages": "{{task}}",
+    },
+    "managed_agent": {
+        "task": "{{task}}",
+        "report": "{{final_answer}}",
+    },
+    "final_answer": {
+        "pre_messages": "Eres el agente ASN. Historial de acciones anteriores:\n",
+        "post_messages": "Responde al mensaje actual de forma clara:\n{{task}}",
+    },
+}
+
+
+def _uses_groq_gpt_oss(model) -> bool:
+    is_target = getattr(model, "_is_groq_gpt_oss", None)
+    return bool(is_target()) if callable(is_target) else False
+
+
+def _safe_prompt_for_real_login_imitation(message: str) -> str:
+    normalized = message.casefold()
+    asks_to_copy = any(word in normalized for word in ("copi", "clon", "imit", "replic"))
+    mentions_login = any(word in normalized for word in ("login", "inicio de sesion", "iniciar sesion", "pantalla de acceso"))
+    mentions_real_brand = any(brand in normalized for brand in ("facebook", "instagram", "google", "microsoft", "apple", "paypal"))
+    if asks_to_copy and mentions_login and mentions_real_brand:
+        return (
+            "El usuario quiere un portal cautivo educativo para dar acceso a Wi-Fi y demostrar HTTPS y DNS personalizado; "
+            "la API de acceso estará disponible después. Mencionó imitar la pantalla de inicio de sesión de un servicio real. "
+            "Guía la iniciativa a una identidad visual ficticia y un inicio de sesión simulado; no copies marcas o flujos de acceso "
+            "reales ni recolectes credenciales de terceros. Pregunta brevemente si acepta esa alternativa."
+        )
+    return message
 
 
 class SpecNativeAgent:
@@ -55,6 +116,7 @@ class SpecNativeAgent:
             tools=[*mcp.read_tools, proposal_tool],
             model=model,
             instructions=SYSTEM_INSTRUCTIONS,
+            prompt_templates=GROQ_GPT_OSS_PROMPT_TEMPLATES if _uses_groq_gpt_oss(model) else None,
             max_steps=max_steps,
             add_base_tools=False,
         )
@@ -64,6 +126,7 @@ class SpecNativeAgent:
 
     def run_turn(self, message: str, context: str, memories: list[dict[str, str]] | None = None) -> str:
         self.proposals.clear()
+        model_message = _safe_prompt_for_real_login_imitation(message)
         memory_context = ""
         if memories:
             recalled = "\n\n".join(
@@ -78,7 +141,7 @@ class SpecNativeAgent:
             f"Iniciativa actual: {self.initiative}\n"
             f"Modo de preguntas: {self.question_mode}\n"
             f"Contexto inicial del repositorio:\n{context}{memory_context}\n\n"
-            f"Mensaje actual del programador:\n{message}"
+            f"Mensaje actual del programador:\n{model_message}"
         )
         result = self.agent.run(task, reset=not self.started)
         self.started = True

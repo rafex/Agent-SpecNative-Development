@@ -157,6 +157,18 @@ def test_provider_request_omits_reasoning_effort_when_unset():
     assert "reasoning_effort" not in body
 
 
+def test_groq_gpt_oss_provider_request_excludes_private_reasoning():
+    credentials = ResolvedCredentials(
+        model="openai/gpt-oss-120b",
+        api_base="https://api.groq.com/openai/v1",
+        api_key="secret-token",
+    )
+
+    request = provider_check._prepare_request(credentials, reasoning_effort="low")
+
+    assert json.loads(request.body)["include_reasoning"] is False
+
+
 @pytest.mark.parametrize(
     ("name", "value"),
     [("other_tool", "ASN tool calling funciona"), ("asn_tool_call_probe", "wrong value")],
