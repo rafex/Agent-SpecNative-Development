@@ -1,0 +1,26 @@
+direction: right
+
+user: Programador { shape: person }
+asn: ASN Agent
+spec: "spec-native/\ncontexto vigente"
+model: "API compatible\nchat + embeddings opcionales"
+sqlite: "SQLite\nmemory.sqlite3" {
+  turns: "turns\nmensajes visibles"
+  calls: "calls\nmetadatos resumidos"
+  metadata: "metadata\nmigración y modelo"
+  vec: "memory_vectors\nsqlite-vec opcional"
+}
+eval: "JSONL temporal\nrequest + respuesta + duración"
+
+user -> asn: mensaje / respuesta
+asn -> spec: lee vía MCP
+asn -> model: prompt y llamadas de herramienta
+model -> asn: respuesta, tool call o error
+asn -> sqlite.turns: persiste turno
+asn -> sqlite.calls: registra duración y estado
+asn -> eval: registra trazabilidad completa
+asn -> model: embedding de consulta/turno
+model -> asn: vector
+asn -> sqlite.vec: indexa o busca similitud
+sqlite.vec -> sqlite.turns: IDs candidatos
+sqlite.metadata -> sqlite.vec: versión y dimensión

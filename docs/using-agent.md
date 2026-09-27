@@ -82,6 +82,10 @@ no admite embeddings, ASN muestra un aviso, conserva el historial SQL y sigue
 la sesión sin recuerdos vectoriales. Cuando está activa, recupera hasta cinco
 turnos del repositorio y prioriza la iniciativa actual.
 
+Consulta [Memoria e historial en SQLite](history-and-sqlite.md) para conocer
+las tablas, el flujo de recuperación, la separación del eval temporal y los
+diagramas de la integración.
+
 ## MCP en un cliente de desarrollo
 
 Configura el cliente desde el repositorio destino:

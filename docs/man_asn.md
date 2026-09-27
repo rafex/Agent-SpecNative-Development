@@ -38,6 +38,10 @@ endpoint no ofrece embeddings, la sesión sigue con historial sin búsqueda
 semántica. Para desactivar toda persistencia, configura
 `SPECNATIVE_AGENT_HISTORY=false`.
 
+La guía [Memoria e historial en SQLite](history-and-sqlite.md) documenta el
+esquema, el ciclo de almacenamiento, la recuperación de contexto y los
+diagramas Mermaid y D2.
+
 ```bash
 asn --auth                  # credenciales globales del usuario
 asn --auth --repo .         # credenciales para el proyecto actual
