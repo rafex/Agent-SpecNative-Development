@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+from contextlib import contextmanager
 
 import pytest
 
@@ -35,6 +36,13 @@ class FakeMcp:
         if name == "list_specs":
             return "initiative-a"
         return "ok"
+
+    @contextmanager
+    def approved_calls(self, required):
+        yield self.call
+
+    def approval_backend_for(self, required):
+        return "MCP del proyecto"
 
     def __enter__(self):
         return self
@@ -100,6 +108,32 @@ def test_reject_does_not_write_and_stale_token_fails(tmp_path, monkeypatch):
         current.approve(result["approval_token"])
 
 
+def test_failed_approval_keeps_proposal_pending_for_retry(tmp_path, monkeypatch):
+    current = session(tmp_path, monkeypatch)
+    result = current.message("idea")
+    original = current.mcp.approved_calls
+    attempts = {"writes": 0}
+
+    @contextmanager
+    def fails_once(required):
+        def call(name, **arguments):
+            if name == "write_spec" and attempts["writes"] == 0:
+                attempts["writes"] += 1
+                raise RuntimeError("temporary MCP error")
+            return original_call(name, **arguments)
+
+        original_call = current.mcp.call
+        yield call
+
+    current.mcp.approved_calls = fails_once
+    with pytest.raises(RuntimeError, match="temporary MCP error"):
+        current.approve(result["approval_token"])
+    assert current.pending is not None
+    applied = current.approve(result["approval_token"])
+    assert applied["status"] == "applied"
+    assert current.pending is None
+
+
 def test_template_requires_explicit_command_and_approval(tmp_path, monkeypatch):
     current = session(tmp_path, monkeypatch)
     normal = current.message("usa una plantilla feature-rest-endpoint")
@@ -152,6 +186,7 @@ def test_manager_returns_model_eval_path_in_session_start(tmp_path, monkeypatch)
     class StartedSession:
         session_id = "session-id"
         eval_log_path = path
+        model_id = "test/model"
 
         @staticmethod
         def _result(status, text, **extra):

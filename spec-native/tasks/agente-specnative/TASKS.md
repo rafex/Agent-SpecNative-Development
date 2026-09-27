@@ -466,3 +466,22 @@ completion_evidence = ["`asn models --repo /home/rafex/repository/rafex/portal-c
 ```
 
 Agregar `asn models` para enviar GET /models al endpoint configurado con la misma autenticación segura que ASN. Listar IDs disponibles, marcar el modelo configurado y manejar errores sin imprimir el token. Documentar el comando como validación del catálogo del proveedor.
+
+### TASK-AGENTE-SPECNATIV-0024 - Recuperar turnos fallidos y aprobar propuestas con MCP compatible
+
+> **Update 2026-09-27T05:18:38Z:** Implementación autorizada; preservar el MCP local de portal-captive y no escribir allí propuestas automáticamente.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0024"
+title = "Recuperar turnos fallidos y aprobar propuestas con MCP compatible"
+state = "in_progress"
+priority = "p1"
+owner = "dev"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "La sesión no termina por un fallo de generación ni por un fallo de aprobación. /retry, /edit, /skip, /approve, /reject y /model mantienen el estado correcto; el modelo activo se muestra al iniciar y al consultar. Las aprobaciones usan MCP del proyecto si soporta escrituras o el MCP incluido con ASN en caso contrario, sólo tras aprobación explícita."
+validation = ["Pruebas unitarias de recuperación, persistencia de estado en RAM y fallback MCP; suite del paquete pasa.", "Verificar documentación de comandos y que ASN instalado reporte el hash publicado."]
+```
+
+Mantener ASN interactivo tras agotar reintentos del modelo, permitir reintentar/editar/omitir el mensaje en RAM, mostrar modelo activo y completar escrituras aprobadas usando el MCP incluido cuando el MCP del proyecto no ofrezca write_spec/write_tasks.

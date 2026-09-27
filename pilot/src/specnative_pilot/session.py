@@ -145,6 +145,11 @@ class AgentSession:
         path = getattr(model, "eval_log_path", None)
         return Path(path) if path is not None else None
 
+    @property
+    def model_id(self) -> str:
+        model = getattr(self.agent, "model", None)
+        return str(getattr(model, "model_id", None) or self.config.model or "desconocido")
+
     @classmethod
     def create(
         cls,
@@ -244,21 +249,32 @@ class AgentSession:
         if pending is None or pending.token != token:
             raise SessionError("Token de aprobación inválido o expirado.")
         if pending.kind == "template":
-            result = str(self.mcp.call("apply_spec_template", template_name=pending.template, initiative=self.initiative))
+            required = {"apply_spec_template", "validate", "health_check"}
         else:
-            outputs = []
+            required = {"validate", "health_check"}
             for proposal in pending.proposals:
                 if proposal.document == "spec":
-                    outputs.append(self.mcp.call("write_spec", initiative=proposal.initiative, content=proposal.content))
+                    required.add("write_spec")
                 elif proposal.document == "tasks":
-                    outputs.append(self.mcp.call("write_tasks", initiative=proposal.initiative, content=proposal.content))
+                    required.add("write_tasks")
                 else:
                     raise SessionError(f"Documento no soportado: {proposal.document}")
-            result = "\n".join(map(str, outputs))
-        validation = str(self.mcp.call("validate"))
-        health = str(self.mcp.call("health_check"))
+        with self.mcp.approved_calls(required) as call:
+            if pending.kind == "template":
+                result = str(call("apply_spec_template", template_name=pending.template, initiative=self.initiative))
+            else:
+                outputs = []
+                for proposal in pending.proposals:
+                    tool = "write_spec" if proposal.document == "spec" else "write_tasks"
+                    outputs.append(call(tool, initiative=proposal.initiative, content=proposal.content))
+                result = "\n".join(map(str, outputs))
+            validation = str(call("validate"))
+            health = str(call("health_check"))
         self.pending = None
-        return self._result("applied", result, validation=validation, health_check=health)
+        return self._result(
+            "applied", result, validation=validation, health_check=health,
+            approval_backend=getattr(self.mcp, "approval_backend", "MCP del proyecto"),
+        )
 
     def reject(self, token: str) -> dict[str, Any]:
         self._ensure_open()
@@ -336,6 +352,7 @@ class SessionManager:
         return session._result(
             "ready",
             "Sesión ASN iniciada.",
+            model=session.model_id,
             eval_log=str(session.eval_log_path) if session.eval_log_path is not None else None,
         )
 

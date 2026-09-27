@@ -27,9 +27,10 @@ El preflight valida el contexto SpecNative antes de cargar el modelo. Si falla,
 atiende el error de estructura y vuelve a ejecutar ASN; no pidas al agente que
 evada la validación.
 
-En la sesión puedes describir la idea y responder las preguntas del agente.
-`/help` muestra ayuda, `/quit` cierra la sesión y `/template` lista las
-plantillas disponibles. En modo por bloques:
+Al iniciar, ASN muestra el identificador del modelo cargado. En la sesión puedes
+describir la idea y responder las preguntas del agente. `/model` vuelve a mostrar
+el modelo activo; `/help` muestra ayuda, `/quit` cierra la sesión y `/template`
+lista las plantillas disponibles. En modo por bloques:
 
 ```bash
 asn --repo . --question-mode batch
@@ -46,7 +47,10 @@ mismo paso hasta 12 llamadas totales sin consumir pasos del agente. Usa backoff
 exponencial de 250 ms hasta 2 s y `reasoning_effort=low` en los reintentos; parte
 de 1024 tokens y duplica el límite sólo con `finish_reason=length`, hasta
 65 536. Si el endpoint rechaza `max_completion_tokens`, reintenta con
-`max_tokens`. Al agotar intentos, detiene el turno con un error explícito.
+`max_tokens`. Al agotar intentos, conserva el mensaje en memoria y deja la
+sesión abierta. `/retry` repite el turno con su límite normal; `/edit` permite
+cambiar el mensaje y `/skip` lo descarta. Hasta resolverlo, ASN rechaza mensajes
+nuevos para preservar el orden de la conversación.
 Para Groq GPT-OSS, ASN envía `include_reasoning=false` en las solicitudes para
 que las respuestas traigan el contenido utilizable o la llamada a herramienta,
 en lugar del canal `reasoning` interno. En los turnos siguientes reconstruye
@@ -117,9 +121,13 @@ En el flujo MCP normal, usa `asn-agent` y sigue este ciclo:
 5. Usa `agent_session_status` para consultar la sesión y
    `agent_session_close` al terminar.
 
-Al aprobar una propuesta, ASN escribe mediante el MCP de SpecNative y devuelve
-el resultado de `validate` y `health_check`. Revisa esa evidencia y los archivos
-reportados. Un rechazo descarta la propuesta sin cambiar archivos.
+Al aprobar una propuesta, ASN usa el MCP del proyecto si expone todas las tools
+de escritura requeridas. Si faltan, ejecuta el MCP incluido con ASN sólo para
+esa operación ya aprobada; ese fallback no se ofrece al modelo. ASN devuelve el
+resultado de `validate` y `health_check`. Si la escritura falla, la propuesta
+queda pendiente y puede reintentarse con `/approve` o descartarse con `/reject`
+en CLI (o `agent_session_approve`/`agent_session_reject` en MCP). Revisa la
+evidencia y los archivos reportados.
 
 ## Plantillas
 

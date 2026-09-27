@@ -2,6 +2,7 @@ from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from smolagents.utils import AgentGenerationError
 
 from specnative_pilot.config import Config
@@ -186,19 +187,26 @@ def test_help_falls_back_to_markdown_when_mdcat_is_missing(tmp_path, monkeypatch
     assert "/template <nombre>" in output.getvalue()
 
 
-def test_generation_error_exits_cleanly_without_writes(tmp_path, monkeypatch):
+def test_generation_error_keeps_session_open_for_manual_retry(tmp_path, monkeypatch):
     output = StringIO()
-    controller = Controller(config(tmp_path), input_fn=lambda _: "describir idea", output=output)
+    answers = iter(["describir idea", "/retry", "/model", "/quit"])
+    controller = Controller(config(tmp_path), input_fn=lambda _: next(answers), output=output)
     monkeypatch.setattr("specnative_pilot.controller.record_failure", lambda *args, **kwargs: None)
     mcp = FakeMcp("unused")
     monkeypatch.setattr("specnative_pilot.controller.SpecNativeMcp", lambda *_: mcp)
 
     class BrokenSession:
         closed = False
+        model_id = "qwen/qwen3.8-27b"
+        eval_log_path = None
+        messages = []
 
-        def message(self, _):
-            logger = SimpleNamespace(log_error=lambda _: None)
-            raise AgentGenerationError("provider rejected tool call", logger)
+        def message(self, text):
+            self.messages.append(text)
+            if len(self.messages) == 1:
+                logger = SimpleNamespace(log_error=lambda _: None)
+                raise AgentGenerationError("provider rejected tool call", logger)
+            return {"status": "question", "text": "ok"}
 
         def close(self):
             self.closed = True
@@ -208,9 +216,39 @@ def test_generation_error_exits_cleanly_without_writes(tmp_path, monkeypatch):
 
     result = controller.run("portal-captive")
 
-    assert result == 2
+    assert result == 0
     assert session.closed
-    assert "compatibles con tool calling" in output.getvalue()
-    assert "No se modificaron archivos" in output.getvalue()
+    assert session.messages == ["describir idea", "describir idea"]
+    assert "Modelo activo: qwen/qwen3.8-27b" in output.getvalue()
+    assert "Modelo activo en esta sesión: qwen/qwen3.8-27b" in output.getvalue()
+    assert "turno queda recuperable" in output.getvalue()
     assert "Traceback" not in output.getvalue()
     assert not [name for name, _ in mcp.calls if name.startswith("write_")]
+
+
+def test_agent_rolls_back_only_partial_memory_from_failed_turn(monkeypatch):
+    from specnative_pilot.agent import SpecNativeAgent
+
+    class Memory:
+        def __init__(self):
+            self.steps = []
+
+    class ToolAgent:
+        def __init__(self, **kwargs):
+            self.memory = Memory()
+            self.calls = 0
+
+        def run(self, task, reset):
+            self.calls += 1
+            self.memory.steps.append(f"step-{self.calls}")
+            if self.calls == 2:
+                raise RuntimeError("generation failed")
+            return "good turn"
+
+    monkeypatch.setattr("specnative_pilot.agent.ToolCallingAgent", ToolAgent)
+    agent = SpecNativeAgent(object(), SimpleNamespace(read_tools=[]), "demo", "single")
+    assert agent.run_turn("first", "context") == "good turn"
+    with pytest.raises(RuntimeError, match="generation failed"):
+        agent.run_turn("second", "context")
+    assert agent.agent.memory.steps == ["step-1"]
+    assert agent.started is True

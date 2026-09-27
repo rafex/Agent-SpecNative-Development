@@ -143,6 +143,15 @@ class SpecNativeAgent:
             f"Contexto inicial del repositorio:\n{context}{memory_context}\n\n"
             f"Mensaje actual del programador:\n{model_message}"
         )
-        result = self.agent.run(task, reset=not self.started)
+        # smolagents appends action steps while a run is in progress. If generation
+        # fails, remove only this failed run's partial steps and preserve earlier
+        # successful turns for the manual retry.
+        memory_steps = self.agent.memory.steps
+        previous_steps = list(memory_steps)
+        try:
+            result = self.agent.run(task, reset=not self.started)
+        except Exception:
+            self.agent.memory.steps = previous_steps
+            raise
         self.started = True
         return str(result)

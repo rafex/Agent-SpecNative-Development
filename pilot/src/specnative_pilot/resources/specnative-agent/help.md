@@ -12,6 +12,12 @@ archivos.
 | `/help` | Mostrar esta ayuda. |
 | `/template` | Listar las plantillas de spec disponibles. |
 | `/template <nombre>` | Solicitar una plantilla por nombre; ASN muestra el alcance y pide confirmación antes de aplicarla. |
+| `/model` | Mostrar el identificador del modelo cargado para esta sesión. |
+| `/retry` | Reintentar el último mensaje si se agotaron los intentos del modelo. |
+| `/edit` | Reemplazar el mensaje fallido; luego usa `/retry`. |
+| `/skip` | Descartar el mensaje fallido y continuar la sesión. |
+| `/approve` | Reintentar una aprobación cuya escritura o validación falló. |
+| `/reject` | Descartar una propuesta pendiente cuya aplicación falló. |
 | `/quit` o `/exit` | Cerrar la sesión. |
 
 Al iniciar, escribe el slug de una iniciativa existente para ver sugerencias y
@@ -24,6 +30,18 @@ Cuando ASN tenga suficiente información, presentará una propuesta. Confirma
 sólo después de revisarla; responder sí la aplica y cualquier otra respuesta la
 rechaza sin modificar archivos. Una propuesta pendiente debe resolverse antes
 de enviar otro mensaje.
+
+Si se agotan los intentos del modelo, ASN mantiene abierta la sesión y conserva
+el mensaje fallido sólo en memoria durante esa sesión. Usa `/retry`, `/edit` o
+`/skip`; mientras exista ese turno pendiente, ASN no acepta mensajes nuevos para
+evitar perder el contexto. Cada `/retry` ejecuta el límite normal de intentos.
+`/model` muestra el modelo cargado al iniciar; cambiar configuración requiere
+iniciar una sesión nueva.
+
+Si el MCP del proyecto no publica las herramientas `write_spec` o `write_tasks`,
+ASN usa su MCP incluido para aplicar únicamente la propuesta que confirmaste.
+La propuesta se conserva si la escritura o validación falla: `/approve` vuelve a
+intentarlo y `/reject` la descarta. El fallback no se expone al modelo.
 
 Las plantillas se aplican únicamente con `/template <nombre>` y después de una
 confirmación explícita. Mencionarlas en una conversación normal no las ejecuta.
@@ -46,7 +64,8 @@ El modelo y endpoint deben admitir llamadas a herramientas (tool calling). ASN
 configura Groq GPT-OSS con `tool_choice=auto` para permitir que el agente
 termine con una respuesta normal después de ejecutar herramientas. Si se fuerza
 `tool_choice=required` y el proveedor rechaza la llamada, ASN reintenta una vez;
-si vuelve a fallar, termina sin aplicar cambios. `asn --test`
+si vuelve a fallar, el turno queda pendiente para una recuperación manual y no
+se aplican cambios. `asn --test`
 comprueba la llamada a herramienta antes de iniciar y el log de fallas registra
 el esfuerzo efectivo y el número de peticiones enviadas, sin guardar prompts.
 

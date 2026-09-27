@@ -192,9 +192,13 @@ class Controller:
             initiative = initiative or self.choose_initiative(mcp)
             session = AgentSession.from_mcp(self.config, initiative, mcp, owns_mcp=False)
             eval_log_path = getattr(session, "eval_log_path", None)
+            model_id = getattr(session, "model_id", None) or self.config.model or "desconocido"
+            self.say(f"Modelo activo: {model_id}")
             if eval_log_path is not None:
                 self.say(f"Eval de llamadas al modelo: {eval_log_path}")
-            self.say("Piloto SpecNative iniciado. Usa /template nombre, /help o /quit.")
+            self.say("Piloto SpecNative iniciado. Usa /help para ver comandos.")
+            pending_failed_message: str | None = None
+            pending_approval_token: str | None = None
             while True:
                 message = self.input("\n> ").strip()
                 if message in {"/quit", "/exit"}:
@@ -203,8 +207,52 @@ class Controller:
                 if message == "/help":
                     self.show_help()
                     continue
+                if message == "/model":
+                    self.say(f"Modelo activo en esta sesión: {model_id}")
+                    continue
                 if not message:
                     continue
+
+                if pending_approval_token is not None:
+                    if message == "/approve":
+                        try:
+                            applied = session.approve(pending_approval_token)
+                        except Exception as error:
+                            record_failure("approval", error, model=model_id, endpoint=self.config.api_base, include_traceback=True)
+                            self.say(f"No se pudo aplicar la propuesta: {error}")
+                            self.say("La propuesta sigue pendiente. Reintenta con /approve, usa /reject o /help.")
+                            continue
+                        pending_approval_token = None
+                        self.say(str(applied.get("text", "")))
+                        self.say(str(applied.get("validation", "")))
+                        self.say(str(applied.get("health_check", "")))
+                        self.say(f"Escritura realizada mediante: {applied.get('approval_backend', 'MCP')}")
+                        continue
+                    if message == "/reject":
+                        self.say(session.reject(pending_approval_token)["text"])
+                        pending_approval_token = None
+                        continue
+                    self.say("Hay una propuesta aprobada cuya escritura falló. Usa /approve para reintentar o /reject para descartarla.")
+                    continue
+
+                if pending_failed_message is not None:
+                    if message == "/skip":
+                        pending_failed_message = None
+                        self.say("Turno fallido descartado; la sesión sigue activa.")
+                        continue
+                    if message == "/edit":
+                        replacement = self.input("Nuevo mensaje (vacío o /cancel para conservar el anterior): ").strip()
+                        if replacement and replacement != "/cancel":
+                            pending_failed_message = replacement
+                            self.say("Mensaje pendiente actualizado. Usa /retry para enviarlo o /skip para descartarlo.")
+                        else:
+                            self.say("Se conserva el mensaje fallido. Usa /retry o /skip.")
+                        continue
+                    if message == "/retry":
+                        message = pending_failed_message
+                    else:
+                        self.say("Hay un turno fallido pendiente. Usa /retry, /edit o /skip antes de escribir otro mensaje.")
+                        continue
                 try:
                     result = session.message(message)
                 except AgentGenerationError as error:
@@ -223,20 +271,21 @@ class Controller:
                         attempts=attempts,
                         include_traceback=True,
                     )
-                    session.close()
+                    pending_failed_message = message
                     if empty_output is not None:
                         self.say(
-                            f"Error del modelo: {empty_output} ASN detuvo el turno tras "
-                            f"{attempts} intento(s). No se modificaron archivos."
+                            f"Error del modelo ({model_id}): {empty_output} ASN agotó el turno tras "
+                            f"{attempts} intento(s). El texto queda en memoria para recuperarlo."
                         )
                     else:
                         self.say(
-                            "Error del modelo: no pudo completar una llamada a herramienta. "
+                            f"Error del modelo ({model_id}): no pudo completar una llamada a herramienta. "
                             "ASN requiere un modelo y endpoint compatibles con tool calling. "
-                            f"ASN realizó {attempts} intento(s). Revisa la configuración del proveedor y vuelve a iniciar ASN. "
-                            "No se modificaron archivos."
+                            f"ASN realizó {attempts} intento(s). El turno queda recuperable en esta sesión."
                         )
-                    return 2
+                    self.say("Usa /retry para repetir, /edit para corregir el mensaje o /skip para descartarlo. /model muestra el modelo activo.")
+                    continue
+                pending_failed_message = None
                 if result.get("memory_warning"):
                     self.say(f"Aviso de memoria: {result['memory_warning']}")
                 self.say(str(result.get("text", "")))
@@ -246,13 +295,33 @@ class Controller:
                     self.say(f"\n[{proposal['document']}/{proposal['section']}] {proposal['rationale']}")
                     self.say(proposal["content"][:3000])
                 token = result["approval_token"]
+                pending_approval_token = token
+                if result.get("action") == "template":
+                    required = {"apply_spec_template", "validate", "health_check"}
+                else:
+                    required = {"validate", "health_check"}
+                    required.update(
+                        "write_spec" if proposal["document"] == "spec" else "write_tasks"
+                        for proposal in result.get("proposals", [])
+                    )
+                backend = mcp.approval_backend_for(required) if hasattr(mcp, "approval_backend_for") else "MCP del proyecto"
+                self.say(f"Al aprobar, ASN usará: {backend}. Si no ofrece escritura, usará el MCP incluido con ASN.")
                 if self.confirm("¿Confirmar la propuesta?"):
-                    applied = session.approve(token)
+                    try:
+                        applied = session.approve(token)
+                    except Exception as error:
+                        record_failure("approval", error, model=model_id, endpoint=self.config.api_base, include_traceback=True)
+                        self.say(f"No se pudo aplicar la propuesta: {error}")
+                        self.say("La propuesta sigue pendiente. Usa /approve para reintentar o /reject para descartarla.")
+                        continue
+                    pending_approval_token = None
                     self.say(str(applied.get("text", "")))
                     self.say(str(applied.get("validation", "")))
                     self.say(str(applied.get("health_check", "")))
+                    self.say(f"Escritura realizada mediante: {applied.get('approval_backend', 'MCP')}")
                 else:
                     self.say(session.reject(token)["text"])
+                    pending_approval_token = None
         return 0
 
 
