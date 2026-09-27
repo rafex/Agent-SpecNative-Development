@@ -384,3 +384,25 @@ completion_evidence = ["`uv run --project pilot pytest -q` pasó: 117 tests. `ma
 ```
 
 Evitar bucles de parsing cuando Groq GPT-OSS devuelve HTTP 200 sin contenido ni tool call, y hacer que asn --test-mcp reproduzca el catálogo seguro real del agente.
+
+### TASK-AGENTE-SPECNATIV-0020 - Reintentar respuestas vacías de GPT-OSS dentro del paso
+
+> **Update 2026-09-27T02:58:57Z:** Implementado límite de 12 llamadas totales dentro del mismo paso, backoff 250 ms→2 s, max_completion_tokens creciente sólo con finish_reason=length y reasoning_effort=low en reintentos.
+
+> **Update 2026-09-27T02:53:33Z:** Implementar la política aprobada para Groq GPT-OSS, manteniendo los reintentos dentro de generate() para no consumir pasos smolagents.
+
+```toml
+id = "TASK-AGENTE-SPECNATIV-0020"
+title = "Reintentar respuestas vacías de GPT-OSS dentro del paso"
+state = "done"
+priority = "p1"
+owner = "rafex"
+labels = []
+dependencies = []
+expected_files = []
+close_criteria = "Una respuesta vacía sin tool calls reintenta el mismo paso hasta 12 llamadas totales, con backoff exponencial de 250 ms con tope de 2 s. Cuando finish_reason=length, max_completion_tokens se duplica hasta 65 536; en otros motivos no aumenta. reasoning_effort queda en low. Al agotar intentos el turno falla con diagnóstico. Pruebas y documentación cubren la política."
+validation = ["uv run --project pilot pytest -q", "make docs", "git diff --check", "SpecNative validate"]
+completion_evidence = ["`uv run --project pilot pytest -q`: 119 passed. `make docs`: sitio construido correctamente; MkDocs Material mostró su advertencia upstream sobre MkDocs 2.0. `git diff --check`: passed. SpecNative validate: 15 archivos y referencias válidos."]
+```
+
+Evitar que respuestas exitosas vacías de Groq GPT-OSS consuman pasos smolagents; limitar llamadas por paso y recuperar presupuesto cuando finish_reason indique length.

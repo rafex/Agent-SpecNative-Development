@@ -41,9 +41,12 @@ el agente dispone del catálogo real de 20 tools MCP de solo lectura,
 `propose_change` (colector local sin escritura) y `final_answer`; el flujo de
 prueba ejecuta `status` y completa la respuesta. Hace llamadas reales al modelo
 y puede consumir cuota; reporta la etapa fallida y la ruta del eval temporal.
-Si Groq GPT-OSS devuelve una respuesta exitosa vacía, ASN reintenta una vez y
-detiene el turno con un error explícito si vuelve a ocurrir. Nunca usa el campo
-`reasoning` como respuesta.
+Si Groq GPT-OSS devuelve una respuesta exitosa vacía, ASN repite el mismo paso
+hasta 12 llamadas totales sin consumir pasos del agente. Usa backoff exponencial
+de 250 ms hasta 2 s y `reasoning_effort=low` en los reintentos; parte de 1024
+`max_completion_tokens` y duplica el límite sólo con `finish_reason=length`,
+hasta 65 536. Al agotarlos, detiene el turno con un error explícito. Nunca usa
+el campo `reasoning` como respuesta.
 
 Cada sesión escribe un eval JSONL bajo una carpeta privada del directorio
 temporal del sistema. La CLI muestra la ruta al iniciar; `agent_session_start`

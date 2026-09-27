@@ -194,7 +194,7 @@ def test_agent_mcp_check_explains_repeated_empty_provider_output(tmp_path):
         tmp_path / "eval.jsonl",
     )
 
-    with pytest.raises(AgentMcpTestError, match="dos respuestas exitosas sin contenido") as error:
+    with pytest.raises(AgentMcpTestError, match="respuestas exitosas sin contenido") as error:
         check_agent_mcp(
             config(tmp_path),
             model_builder=lambda _: model,

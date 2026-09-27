@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from contextlib import contextmanager
 import json
+import time
 from uuid import uuid4
 from urllib.parse import urlsplit
 
@@ -24,6 +26,11 @@ _EMPTY_OUTPUT_RETRY_INSTRUCTION = (
     "apropiada del catálogo disponible o, si ya puedes responder, llama final_answer. "
     "No repitas el razonamiento; devuelve una acción válida."
 )
+_EMPTY_OUTPUT_MAX_ATTEMPTS = 12
+_INITIAL_MAX_COMPLETION_TOKENS = 1024
+_MAX_COMPLETION_TOKENS = 65536
+_RETRY_BACKOFF_INITIAL_SECONDS = 0.25
+_RETRY_BACKOFF_MAX_SECONDS = 2.0
 
 
 class ToolCallRetryExhausted(RuntimeError):
@@ -38,7 +45,10 @@ class EmptyModelOutputError(RuntimeError):
     """Successful completion had neither user-facing content nor a tool call."""
 
     def __init__(self, attempts: int, finish_reason: str | None = None) -> None:
-        detail = "El proveedor devolvió dos respuestas exitosas sin contenido ni llamada a herramienta."
+        detail = (
+            "El proveedor devolvió respuestas exitosas sin contenido ni llamada a herramienta "
+            f"en {attempts} intentos."
+        )
         if finish_reason:
             detail += f" finish_reason={finish_reason}."
         super().__init__(detail)
@@ -177,6 +187,20 @@ class OpenAIServerModel(_OpenAIServerModel):
             and _TOOL_CHOICE_ERROR.casefold() in str(error).casefold()
         )
 
+    @contextmanager
+    def _retry_with_low_reasoning(self):
+        model_kwargs = getattr(self, "kwargs", {})
+        had_reasoning_effort = "reasoning_effort" in model_kwargs
+        previous_reasoning_effort = model_kwargs.get("reasoning_effort")
+        model_kwargs["reasoning_effort"] = "low"
+        try:
+            yield
+        finally:
+            if had_reasoning_effort:
+                model_kwargs["reasoning_effort"] = previous_reasoning_effort
+            else:
+                model_kwargs.pop("reasoning_effort", None)
+
     def parse_tool_calls(self, message):
         if not self._is_groq_gpt_oss():
             return super().parse_tool_calls(message)
@@ -231,6 +255,13 @@ class OpenAIServerModel(_OpenAIServerModel):
     ):
         eval_log = getattr(self, "eval_log", None)
         calls_before = eval_log.request_count if eval_log is not None else 0
+        is_groq_with_tools = self._is_groq_gpt_oss() and bool(tools_to_call_from)
+        max_completion_tokens = kwargs.get(
+            "max_completion_tokens", _INITIAL_MAX_COMPLETION_TOKENS
+        )
+        if is_groq_with_tools:
+            kwargs.setdefault("max_completion_tokens", max_completion_tokens)
+        attempts = 1
         try:
             response = super().generate(
                 messages,
@@ -254,32 +285,42 @@ class OpenAIServerModel(_OpenAIServerModel):
 
             retry_messages = _append_retry_instruction(messages)
             try:
-                return super().generate(
+                response = super().generate(
                     retry_messages,
                     stop_sequences=stop_sequences,
                     response_format=response_format,
                     tools_to_call_from=tools_to_call_from,
                     **kwargs,
                 )
+                attempts += 1
             except Exception as retry_error:
-                attempts = eval_log.request_count - calls_before if eval_log is not None else 1
+                attempts = eval_log.request_count - calls_before if eval_log is not None else 2
                 raise ToolCallRetryExhausted(retry_error, attempts) from retry_error
 
-        if (
-            self._is_groq_gpt_oss()
-            and tools_to_call_from
-            and _is_empty_completion(response)
-        ):
+        if is_groq_with_tools and _is_empty_completion(response):
             retry_messages = _append_empty_output_retry_instruction(messages)
-            response = super().generate(
-                retry_messages,
-                stop_sequences=stop_sequences,
-                response_format=response_format,
-                tools_to_call_from=tools_to_call_from,
-                **kwargs,
-            )
+            while _is_empty_completion(response) and attempts < _EMPTY_OUTPUT_MAX_ATTEMPTS:
+                delay = min(
+                    _RETRY_BACKOFF_INITIAL_SECONDS * 2 ** (attempts - 1),
+                    _RETRY_BACKOFF_MAX_SECONDS,
+                )
+                time.sleep(delay)
+                if _finish_reason(response) == "length":
+                    max_completion_tokens = min(
+                        max_completion_tokens * 2,
+                        _MAX_COMPLETION_TOKENS,
+                    )
+                kwargs["max_completion_tokens"] = max_completion_tokens
+                with self._retry_with_low_reasoning():
+                    response = super().generate(
+                        retry_messages,
+                        stop_sequences=stop_sequences,
+                        response_format=response_format,
+                        tools_to_call_from=tools_to_call_from,
+                        **kwargs,
+                    )
+                attempts += 1
             if _is_empty_completion(response):
-                attempts = eval_log.request_count - calls_before if eval_log is not None else 2
                 raise EmptyModelOutputError(attempts, _finish_reason(response))
         return response
 

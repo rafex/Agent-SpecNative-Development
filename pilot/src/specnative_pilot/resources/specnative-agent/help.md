@@ -56,7 +56,10 @@ MCP configurado. Registra el catálogo real de 20 tools MCP de solo lectura,
 prueba sólo ejecuta `status` y `final_answer`. Hace llamadas reales al modelo,
 puede consumir cuota y muestra la etapa del error, el número de peticiones y la
 ruta del eval temporal. Si Groq GPT-OSS devuelve una respuesta exitosa vacía,
-ASN reintenta una vez y detiene el turno con un error claro si vuelve a ocurrir.
+ASN repite el mismo paso hasta 12 llamadas totales, sin consumir pasos del
+agente. Usa backoff exponencial de 250 ms hasta 2 s y `reasoning_effort=low`
+en los reintentos; parte de 1024 `max_completion_tokens` y duplica el límite
+cuando `finish_reason=length`, hasta 65 536. Al agotarlos, detiene el turno.
 El campo `reasoning` nunca se usa como respuesta.
 
 ## Ayuda de desarrollo

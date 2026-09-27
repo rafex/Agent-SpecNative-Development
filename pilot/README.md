@@ -50,9 +50,12 @@ Con Groq GPT-OSS, ASN usa `tool_choice=auto`: el modelo puede llamar `status`
 cuando corresponde y devolver una respuesta normal al terminar, sin intentar
 invocar un pseudo-tool `json`. ASN normaliza texto final y el pseudo-tool
 `json` con argumento `answer` al formato `final_answer` esperado por smolagents.
-Si Groq GPT-OSS devuelve una respuesta exitosa vacía, ASN reintenta una vez;
-si vuelve a llegar vacía, detiene el turno con un diagnóstico explícito. El
-campo `reasoning` nunca se usa como respuesta.
+Si Groq GPT-OSS devuelve una respuesta exitosa vacía, ASN repite el mismo paso
+hasta 12 llamadas totales, con backoff exponencial de 250 ms hasta 2 s; el
+reintento no consume un paso de smolagents. Parte de 1024 `max_completion_tokens`
+y duplica el límite sólo cuando `finish_reason=length`, hasta 65 536. Los
+reintentos usan `reasoning_effort=low`; agotarlos detiene el turno. El campo
+`reasoning` nunca se usa como respuesta.
 
 Las fallas del CLI y de `asn-agent-mcp` se registran en `asn-failures.jsonl` con
 rotación. ASN prueba `/var/log/asn`, luego la carpeta de logs del usuario
